@@ -163,7 +163,16 @@
 
   function render() {
     if (!state) return;
-    const footer = h("div", { class: "footer muted" }, "Created by Marco Torres C · local only, no telemetry");
+    const a = state.about || {};
+    const footer = h(
+      "div",
+      { class: "footer muted" },
+      `Created by ${a.author || "Marco Torres C"}`,
+      a.hasRepo ? " · " : null,
+      a.hasRepo ? link("GitHub", { type: "openRepo" }, { title: "Open the source repository" }) : null,
+      a.version ? ` · v${a.version}` : null,
+      " · local only, no telemetry",
+    );
     app.replaceChildren(...[controls(), ...notices(), ...reportNodes(), footer].filter((n) => !isEmpty(n)));
   }
 

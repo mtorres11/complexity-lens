@@ -14,7 +14,7 @@ import {
   LANGUAGES,
   StatusBar,
 } from "./vscode/lens";
-import { Sidebar } from "./vscode/sidebar";
+import { aboutFrom, Sidebar } from "./vscode/sidebar";
 
 class Workspace {
   private projects = new Map<string, Project>();
@@ -66,7 +66,7 @@ function createUi(context: vscode.ExtensionContext, ws: Workspace): Ui {
     };
   };
   return {
-    sidebar: new Sidebar(context.extensionUri, current),
+    sidebar: new Sidebar(context.extensionUri, current, aboutFrom(context.extension.packageJSON)),
     lens: new ComplexityCodeLens((u) => ws.projectFor(u)),
     status: new StatusBar((u) => ws.projectFor(u)),
   };

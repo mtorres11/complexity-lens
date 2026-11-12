@@ -6,6 +6,21 @@ import * as vscode from "vscode";
 import type { Project } from "../core/project";
 import { buildReport, Report, Scope, Sort } from "./report";
 
+export interface About {
+  author: string;
+  version: string;
+  /** https URL of the source repository, or "" if unknown. */
+  repoUrl: string;
+}
+
+/** Author, version and repo link from the extension's package.json. */
+export function aboutFrom(pkg: { author?: unknown; version?: unknown; repository?: unknown }): About {
+  const author = typeof pkg.author === "string" ? pkg.author : ((pkg.author as { name?: unknown } | undefined)?.name ?? "");
+  const repo = typeof pkg.repository === "string" ? pkg.repository : ((pkg.repository as { url?: unknown } | undefined)?.url ?? "");
+  const url = String(repo).replace(/^git\+/, "").replace(/\.git$/, "");
+  return { author: String(author), version: String(pkg.version ?? ""), repoUrl: /^https:\/\/[^\s]+$/.test(url) ? url : "" };
+}
+
 const SCOPES: Scope[] = ["changed", "repo", "current"];
 const SORTS: Sort[] = ["aiCost", "complexity", "hotspot", "name"];
 
@@ -23,6 +38,7 @@ export class Sidebar implements vscode.WebviewViewProvider {
       errors: string[];
       trusted: boolean;
     },
+    private readonly about: About,
   ) {}
 
   resolveWebviewView(view: vscode.WebviewView): void {
@@ -64,6 +80,7 @@ export class Sidebar implements vscode.WebviewViewProvider {
       sort: s.sort,
       configErrors: errors,
       trusted,
+      about: { author: this.about.author, version: this.about.version, hasRepo: !!this.about.repoUrl },
     };
     if (!project) {
       void this.view.webview.postMessage({
@@ -119,6 +136,10 @@ export class Sidebar implements vscode.WebviewViewProvider {
         return this.open(m.path, m.line);
       case "openConfig":
         return void vscode.commands.executeCommand("complexityLens.openConfig");
+      case "openRepo":
+        // Only the https repo URL from the extension's own package.json, never a URL from the webview.
+        if (this.about.repoUrl) void vscode.env.openExternal(vscode.Uri.parse(this.about.repoUrl));
+        return;
       case "installHook":
         return void vscode.commands.executeCommand(
           "complexityLens.installHook",
