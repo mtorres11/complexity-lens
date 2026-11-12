@@ -1,0 +1,72 @@
+name: release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write      # create the GitHub Release
+      id-token: write      # sign the build-provenance attestations
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+      - name: Tag must match package.json version
+        run: |
+          v="v$(node -p "require('./package.json').version")"
+          if [ "$v" != "$GITHUB_REF_NAME" ]; then echo "Tag $GITHUB_REF_NAME does not match package.json $v"; exit 1; fi
+      - run: npm ci --ignore-scripts
+      - run: npm test
+      - run: npm run package
+      - run: cp dist/cli.js complexity-lens-cli.js
+      - run: sha256sum complexity-lens.vsix complexity-lens-cli.js > SHA256SUMS.txt
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            complexity-lens.vsix
+            complexity-lens-cli.js
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" complexity-lens.vsix complexity-lens-cli.js SHA256SUMS.txt --generate-notes --verify-tag
+
+  # Publishes the exact attested .vsix to the VS Code Marketplace.
+  # Runs only when the repo variable MARKETPLACE_PUBLISH is "true", in the protected
+  # "marketplace" environment (owner approval required, v* tags only), which holds VSCE_PAT.
+  marketplace:
+    needs: release
+    if: vars.MARKETPLACE_PUBLISH == 'true'
+    runs-on: ubuntu-latest
+    environment: marketplace
+    permissions:
+      contents: read
+      attestations: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Download the released file
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download "$GITHUB_REF_NAME" --pattern complexity-lens.vsix
+      - name: Verify its build provenance before publishing
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh attestation verify complexity-lens.vsix --repo "$GITHUB_REPOSITORY"
+      - name: Publish to the VS Code Marketplace
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: npx vsce publish --packagePath complexity-lens.vsix

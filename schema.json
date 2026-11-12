@@ -1,0 +1,195 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Complexity Lens configuration",
+  "description": "Rules for Complexity Lens. Every option is optional; anything left out comes from the preset.",
+  "type": "object",
+  "additionalProperties": false,
+  "definitions": {
+    "globs": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1, "maxLength": 300 },
+      "maxItems": 200
+    },
+    "limit": {
+      "type": ["integer", "null"],
+      "minimum": 1,
+      "markdownDescription": "Set to `null` to turn this check off."
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "markdownDescription": "When something counts as **too much**. Set any limit to `null` to turn that check off.",
+      "properties": {
+        "cognitiveComplexity": {
+          "$ref": "#/definitions/limit",
+          "markdownDescription": "**How hard a function is to follow.** Adds 1 for each `if`, `else`, loop, `catch`, ternary, `switch`, labelled jump and each mixed `&&`/`||`/`??` chain, plus extra for every level of nesting. High scores are where AI edits introduce bugs.\n\nPresets: relaxed 25 · recommended 15 · strict 10."
+        },
+        "functionLines": {
+          "$ref": "#/definitions/limit",
+          "markdownDescription": "**Length of one function, in lines.** Long functions must be read in full to edit safely.\n\nPresets: relaxed 100 · recommended 60 · strict 40."
+        },
+        "nestingDepth": {
+          "$ref": "#/definitions/limit",
+          "markdownDescription": "**How many `if` / loop / `switch` / `try` levels sit inside each other.** Deep nesting is the most common source of AI logic mistakes.\n\nPresets: relaxed 5 · recommended 4 · strict 3."
+        },
+        "parameters": {
+          "$ref": "#/definitions/limit",
+          "markdownDescription": "**Inputs a function takes.** Many parameters often means the function does too much.\n\nPresets: relaxed 7 · recommended 5 · strict 4."
+        },
+        "fileLines": {
+          "$ref": "#/definitions/limit",
+          "markdownDescription": "**Length of a file, in lines.** Big files cost tokens every time an AI opens them.\n\nPresets: relaxed 800 · recommended 400 · strict 300."
+        },
+        "fileTokens": {
+          "$ref": "#/definitions/limit",
+          "markdownDescription": "**Estimated tokens to read the file** (about 3.5 characters per token; an estimate, not exact). The direct \"AI reading cost\".\n\nPresets: relaxed 16000 · recommended 8000 · strict 6000."
+        },
+        "imports": {
+          "$ref": "#/definitions/limit",
+          "markdownDescription": "**How many other modules this file depends on.** Each import is more code an AI may need to read.\n\nPresets: relaxed 25 · recommended 15 · strict 12."
+        }
+      }
+    },
+    "policy": {
+      "type": "string",
+      "enum": ["ratchet", "absolute"],
+      "markdownEnumDescriptions": [
+        "**Don't make it worse.** New functions must be under the limits; existing ones may stay over them but an edit can't push them higher. Untouched code is never flagged.",
+        "**Everything must be under the limits.** Anything over a limit in the checked files is flagged, even if it wasn't changed. Best for new projects."
+      ]
+    },
+    "hook": {
+      "type": "object",
+      "additionalProperties": false,
+      "markdownDescription": "**Agent hook**: checks code while an AI agent edits it (PostToolUse / Stop command hooks).",
+      "properties": {
+        "afterEdit": {
+          "type": "string",
+          "enum": ["off", "inform", "nudge"],
+          "markdownDescription": "What happens **after each file edit**.",
+          "markdownEnumDescriptions": [
+            "No check after edits.",
+            "The agent gets a note about new problems; it may act on it or not.",
+            "The agent gets the problems as something it must respond to (fix it or explain) before continuing. The edit itself is kept."
+          ]
+        },
+        "onFinish": {
+          "type": "string",
+          "enum": ["off", "inform", "block"],
+          "markdownDescription": "What happens **when the agent tries to end its turn**. Checks every file changed since the last commit.",
+          "markdownEnumDescriptions": [
+            "No check at the end.",
+            "You get a summary of anything still over the limits.",
+            "The agent can't finish while a file it changed has problems (judged by `policy`). After `maxRetries` attempts it may finish and the problems are reported to you instead."
+          ]
+        },
+        "maxRetries": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10,
+          "markdownDescription": "How many times `onFinish: \"block\"` sends the agent back before letting it finish and reporting to you. Prevents endless loops when something can't be simplified."
+        }
+      }
+    },
+    "allowComment": {
+      "type": "object",
+      "additionalProperties": false,
+      "markdownDescription": "**Escape hatch**: a comment above a function that accepts it as is, e.g. `// complexity-ok: parser state machine`. Accepted functions are still shown, but never block.",
+      "properties": {
+        "marker": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]{2,39}$",
+          "markdownDescription": "The word to look for (3–40 lowercase letters, digits or hyphens). Default `complexity-ok`."
+        },
+        "requireReason": {
+          "type": "boolean",
+          "markdownDescription": "Require a reason after the marker (`// complexity-ok: <reason>`), so reviewers see why. Default `true`."
+        }
+      }
+    }
+  },
+  "properties": {
+    "$schema": { "type": "string" },
+    "preset": {
+      "type": "string",
+      "enum": ["relaxed", "recommended", "strict"],
+      "default": "recommended",
+      "markdownDescription": "**Starting point.** Anything you set explicitly overrides it.",
+      "markdownEnumDescriptions": [
+        "Higher limits, the hook only informs, CI off. For trying it on a big existing codebase.",
+        "Balanced: nudge after each edit, block on finish (ratchet, 2 retries), CI warns.",
+        "Lower limits, absolute policy, CI fails on anything over a limit. For new projects."
+      ]
+    },
+    "include": {
+      "$ref": "#/definitions/globs",
+      "markdownDescription": "**Files to measure**, relative to the repo root. Supports `**`, `*`, `?` and `{a,b}`. Default: every TypeScript/JavaScript file in the repo."
+    },
+    "exclude": {
+      "$ref": "#/definitions/globs",
+      "markdownDescription": "**Files to skip**: tests, generated code, build output. Same pattern syntax as `include`."
+    },
+    "limits": { "$ref": "#/definitions/limits" },
+    "policy": { "$ref": "#/definitions/policy", "markdownDescription": "**What gets judged.**" },
+    "allowComment": { "$ref": "#/definitions/allowComment" },
+    "hook": { "$ref": "#/definitions/hook" },
+    "ci": {
+      "type": "object",
+      "additionalProperties": false,
+      "markdownDescription": "**Pull request check** (`complexity-lens check --base <branch>` in CI).",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["off", "warn", "failOnRegression", "failOverLimit"],
+          "markdownEnumDescriptions": [
+            "No check.",
+            "Annotations on changed lines that got worse; the check still passes.",
+            "The check fails if the pull request made something worse beyond a limit.",
+            "The check fails if any changed file has anything over a limit."
+          ]
+        }
+      }
+    },
+    "tokens": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "includeImports": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3,
+          "markdownDescription": "When estimating **AI cost**, also count the files this file imports, this many levels deep (`0` = the file alone). Default `1`."
+        }
+      }
+    },
+    "hotspots": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "historyDays": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3650,
+          "markdownDescription": "How far back in git history to count changes for **hotspots** (complexity × how often a file changed). Default `90`."
+        }
+      }
+    },
+    "overrides": {
+      "type": "array",
+      "maxItems": 100,
+      "markdownDescription": "**Different rules for parts of the repo**, applied in order. Example: `{ \"files\": [\"src/legacy/**\"], \"hook\": { \"onFinish\": \"inform\" } }`.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["files"],
+        "properties": {
+          "files": { "$ref": "#/definitions/globs", "markdownDescription": "Which files this override applies to." },
+          "limits": { "$ref": "#/definitions/limits" },
+          "policy": { "$ref": "#/definitions/policy" },
+          "hook": { "$ref": "#/definitions/hook" },
+          "allowComment": { "$ref": "#/definitions/allowComment" }
+        }
+      }
+    }
+  }
+}

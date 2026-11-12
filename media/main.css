@@ -1,0 +1,82 @@
+:root {
+  --ok: #2ea043;
+  --warn: #d4a72c;
+  --bad: #e5534b;
+  --rest: rgba(128, 128, 128, 0.35);
+  --border: var(--vscode-panel-border, rgba(128, 128, 128, 0.3));
+  --muted: var(--vscode-descriptionForeground);
+}
+body {
+  padding: 0 8px 12px;
+  color: var(--vscode-foreground);
+  background: var(--vscode-sideBar-background);
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+}
+a { color: var(--vscode-textLink-foreground); text-decoration: none; cursor: pointer; }
+a:hover { text-decoration: underline; }
+.muted { color: var(--muted); }
+.small { font-size: 0.88em; margin-top: 4px; }
+
+.controls {
+  position: sticky; top: 0; z-index: 5; background: var(--vscode-sideBar-background);
+  padding: 8px 0 6px; border-bottom: 1px solid var(--border); display: grid; gap: 4px;
+}
+.row { display: grid; grid-template-columns: 52px 1fr; align-items: center; gap: 6px; min-width: 0; }
+.row-label { color: var(--muted); font-size: 0.92em; }
+.inline { display: flex; gap: 6px; }
+.inline > * { flex: 1; min-width: 0; }
+select, button.secondary {
+  width: 100%; min-width: 0; box-sizing: border-box; height: 24px; font: inherit; border-radius: 2px; padding: 0 6px;
+}
+select {
+  background: var(--vscode-dropdown-background); color: var(--vscode-dropdown-foreground);
+  border: 1px solid var(--vscode-dropdown-border, var(--border));
+}
+button.secondary {
+  cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  background: var(--vscode-button-secondaryBackground, var(--vscode-dropdown-background));
+  color: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
+  border: 1px solid var(--vscode-button-border, transparent);
+}
+button.secondary:hover:not(:disabled) { background: var(--vscode-button-secondaryHoverBackground, var(--vscode-list-hoverBackground)); }
+button.secondary:disabled { opacity: 0.5; cursor: default; }
+
+.summary { padding: 6px 0; font-size: 0.92em; border-bottom: 1px solid var(--border); }
+.notice, .error { margin: 6px 0; padding: 5px 8px; border-radius: 3px; font-size: 0.9em; }
+.notice { background: var(--vscode-inputValidation-warningBackground, rgba(212, 167, 44, 0.15)); border: 1px solid var(--vscode-inputValidation-warningBorder, var(--warn)); }
+.error { background: var(--vscode-inputValidation-errorBackground); border: 1px solid var(--vscode-inputValidation-errorBorder); }
+.empty { padding: 16px 4px; text-align: center; }
+
+.card {
+  border: 1px solid var(--border); border-left: 3px solid var(--rest); border-radius: 4px;
+  padding: 7px 8px; margin: 6px 0; background: var(--vscode-editor-background);
+}
+.card.has-problems { border-left-color: var(--bad); }
+.card-top { display: flex; align-items: baseline; gap: 6px; min-width: 0; margin-bottom: 5px; }
+.path { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; color: var(--vscode-foreground); }
+.delta { flex: none; font-size: 0.85em; font-variant-numeric: tabular-nums; }
+.delta.up { color: var(--bad); }
+.delta.down { color: var(--ok); }
+
+.boxes { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: 1px solid var(--border); border-radius: 3px; }
+.box { padding: 4px 5px 5px; min-width: 0; }
+.box + .box { border-left: 1px solid var(--border); }
+.box-head { display: flex; justify-content: space-between; gap: 3px; font-size: 0.8em; margin-bottom: 4px; white-space: nowrap; overflow: hidden; }
+.box-head .val { font-weight: 600; font-variant-numeric: tabular-nums; }
+.bar { display: flex; height: 6px; border-radius: 3px; overflow: hidden; background: var(--rest); }
+.bar.off { opacity: 0.4; }
+.seg { min-width: 2px; }
+.seg.ok { background: var(--ok); }
+.seg.warn { background: var(--warn); }
+.seg.bad { background: var(--bad); }
+.seg.rest { background: var(--rest); }
+
+.toggle { margin-top: 6px; font-size: 0.9em; color: var(--muted); cursor: pointer; user-select: none; }
+.toggle:hover { color: var(--vscode-foreground); }
+.items { list-style: none; margin: 4px 0 0; padding: 0 0 0 10px; font-size: 0.88em; }
+.item { display: flex; gap: 5px; padding: 1px 0; }
+.item .icon { flex: none; }
+.item.new-over .icon, .item.regression .icon, .item.over .icon { color: var(--bad); }
+.item.improved .icon, .item.allowed .icon { color: var(--ok); }
+.footer { margin-top: 14px; padding-top: 6px; border-top: 1px solid var(--border); font-size: 0.85em; text-align: center; }

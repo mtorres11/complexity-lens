@@ -1,0 +1,201 @@
+{
+  "name": "complexity-lens",
+  "displayName": "Complexity Lens",
+  "description": "See code complexity and AI reading cost per file and function, and keep AI-generated code simple with an agent hook and a CI check.",
+  "version": "0.1.0",
+  "publisher": "mtorres11",
+  "license": "MIT",
+  "author": {
+    "name": "Marco Torres C",
+    "url": "https://github.com/mtorres11"
+  },
+  "homepage": "https://github.com/mtorres11/complexity-lens#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mtorres11/complexity-lens.git"
+  },
+  "bugs": {
+    "url": "https://github.com/mtorres11/complexity-lens/issues"
+  },
+  "keywords": [
+    "complexity",
+    "cognitive complexity",
+    "code quality",
+    "ai",
+    "tokens",
+    "refactoring",
+    "typescript"
+  ],
+  "icon": "media/icon.png",
+  "galleryBanner": {
+    "color": "#6e40c9",
+    "theme": "dark"
+  },
+  "pricing": "Free",
+  "qna": false,
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "In Restricted Mode, Complexity Lens only reads source files. Git-based features (changes since last commit, hotspots) and installing the agent hook are turned off."
+    },
+    "virtualWorkspaces": false
+  },
+  "categories": [
+    "Linters",
+    "Visualization",
+    "Other"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "complexityLens",
+          "title": "Complexity Lens",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "complexityLens": [
+        {
+          "type": "webview",
+          "id": "complexityLens.view",
+          "name": "Complexity"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "complexityLens.refresh",
+        "title": "Refresh",
+        "category": "Complexity Lens",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "complexityLens.openConfig",
+        "title": "Open or Create Repo Config (complexity-lens.json)",
+        "category": "Complexity Lens",
+        "icon": "$(gear)"
+      },
+      {
+        "command": "complexityLens.installHook",
+        "title": "Install Agent Hook",
+        "category": "Complexity Lens"
+      },
+      {
+        "command": "complexityLens.openSettings",
+        "title": "Personal Settings",
+        "category": "Complexity Lens"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "complexityLens.refresh",
+          "when": "view == complexityLens.view",
+          "group": "navigation@1"
+        },
+        {
+          "command": "complexityLens.openConfig",
+          "when": "view == complexityLens.view",
+          "group": "navigation@2"
+        }
+      ]
+    },
+    "jsonValidation": [
+      {
+        "fileMatch": "complexity-lens.json",
+        "url": "./schema.json"
+      }
+    ],
+    "configuration": {
+      "title": "Complexity Lens",
+      "properties": {
+        "complexityLens.scope": {
+          "type": "string",
+          "enum": [
+            "changed",
+            "repo",
+            "current"
+          ],
+          "enumDescriptions": [
+            "Files changed since the last commit (plus new files).",
+            "Every file the repo config includes.",
+            "Only the file open in the editor."
+          ],
+          "default": "changed",
+          "scope": "application",
+          "description": "What the sidebar lists."
+        },
+        "complexityLens.sort": {
+          "type": "string",
+          "enum": [
+            "aiCost",
+            "complexity",
+            "hotspot",
+            "name"
+          ],
+          "enumDescriptions": [
+            "Estimated tokens an AI agent reads to work on the file (file plus its imports).",
+            "Highest function complexity in the file.",
+            "Complexity × how often the file changed recently (needs git).",
+            "File path, alphabetically."
+          ],
+          "default": "aiCost",
+          "scope": "application",
+          "description": "How the sidebar is sorted."
+        },
+        "complexityLens.inlineScores": {
+          "type": "boolean",
+          "default": true,
+          "scope": "application",
+          "description": "Show a small score above each function in the editor (complexity, lines, nesting)."
+        },
+        "complexityLens.statusBar": {
+          "type": "boolean",
+          "default": true,
+          "scope": "application",
+          "description": "Show a summary of the current file in the status bar."
+        },
+        "complexityLens.maxFiles": {
+          "type": "number",
+          "default": 3000,
+          "minimum": 100,
+          "maximum": 20000,
+          "scope": "application",
+          "description": "Maximum number of files analysed for the \"repo\" scope, to keep large repositories fast."
+        },
+        "complexityLens.hookSettingsFile": {
+          "type": "string",
+          "default": "",
+          "scope": "application",
+          "markdownDescription": "Path of your AI agent's hook settings file, relative to the repo root, used by **Install Agent Hook**. The file must use the `PostToolUse` / `Stop` command-hook format. Leave empty to be asked the first time."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc -p ./ --noEmit",
+    "test": "tsc -p tsconfig.test.json && node --test \"out-test/test/*.test.js\"",
+    "selfcheck": "node dist/cli.js check --all --format text --mode warn",
+    "package": "npm run typecheck && npm run build && vsce package --no-dependencies -o complexity-lens.vsix"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/vscode": "^1.95.0",
+    "@vscode/vsce": "^4.1.0",
+    "esbuild": "^0.28.2",
+    "typescript": "~5.9.3"
+  },
+  "overrides": {
+    "minimatch": "^11.0.1"
+  }
+}

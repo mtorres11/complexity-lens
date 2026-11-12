@@ -1,0 +1,247 @@
+// Ties config, git and the analyzer together for one repository.
+
+import * as fs from "fs";
+import * as path from "path";
+import { analyzeSource, FileMetrics } from "./analyze";
+import {
+  Config,
+  isIncluded,
+  LoadResult,
+  settingsFor,
+} from "./config";
+import { parseJsonc, resolveConfig } from "./configParse";
+import { evaluateFile, Finding } from "./evaluate";
+import * as git from "./git";
+import { normalizePath } from "./glob";
+
+export const CONFIG_FILE = "complexity-lens.json";
+const MAX_CONFIG_BYTES = 256 * 1024;
+const MAX_SOURCE_BYTES = 2 * 1024 * 1024;
+const RESOLVE_EXT = [
+  ".ts",
+  ".tsx",
+  ".mts",
+  ".cts",
+  ".js",
+  ".jsx",
+  ".mjs",
+  ".cjs",
+];
+
+export interface ProjectOptions {
+  /** Whether git may be used (false in VS Code Restricted Mode). */
+  useGit: boolean;
+}
+
+export class Project {
+  readonly loaded: LoadResult;
+  private readonly cache = new Map<
+    string,
+    { mtimeMs: number; metrics: FileMetrics }
+  >();
+
+  constructor(
+    readonly root: string,
+    readonly options: ProjectOptions = { useGit: true },
+  ) {
+    this.loaded = loadConfig(root);
+  }
+
+  get config(): Config {
+    return this.loaded.config;
+  }
+
+  /** Repo-relative path for an absolute path, or undefined if it is outside the repo. */
+  relative(absPath: string): string | undefined {
+    const rel = path.relative(this.root, path.resolve(absPath));
+    if (!rel || rel.startsWith("..") || path.isAbsolute(rel)) return undefined;
+    return normalizePath(rel);
+  }
+
+  /** Absolute path for a repo-relative path; refuses anything that escapes the repo. */
+  absolute(relPath: string): string | undefined {
+    const abs = path.resolve(this.root, relPath);
+    return this.relative(abs) === undefined ? undefined : abs;
+  }
+
+  includes(relPath: string): boolean {
+    return isIncluded(this.config, relPath);
+  }
+
+  readWorking(relPath: string): string | undefined {
+    const abs = this.absolute(relPath);
+    if (!abs) return undefined;
+    try {
+      const st = fs.lstatSync(abs);
+      if (!st.isFile() || st.size > MAX_SOURCE_BYTES) return undefined; // skips symlinks too
+      return fs.readFileSync(abs, "utf8");
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** Current metrics of a file on disk (cached by modification time). */
+  metrics(relPath: string, text?: string): FileMetrics | undefined {
+    const marker = settingsFor(this.config, relPath).allowComment.marker;
+    if (text !== undefined) return analyzeSource(relPath, text, marker);
+    const abs = this.absolute(relPath);
+    if (!abs) return undefined;
+    let mtimeMs = 0;
+    try {
+      mtimeMs = fs.statSync(abs).mtimeMs;
+    } catch {
+      return undefined;
+    }
+    const hit = this.cache.get(relPath);
+    if (hit && hit.mtimeMs === mtimeMs) return hit.metrics;
+    const src = this.readWorking(relPath);
+    if (src === undefined) return undefined;
+    const metrics = analyzeSource(relPath, src, marker);
+    this.cache.set(relPath, { mtimeMs, metrics });
+    return metrics;
+  }
+
+  /** Metrics of the file at a git ref, or undefined if it did not exist (or git is off). */
+  baselineMetrics(relPath: string, ref = "HEAD"): FileMetrics | undefined {
+    if (!this.options.useGit || !git.hasCommit(this.root, ref))
+      return undefined;
+    const text = git.fileAt(this.root, ref, relPath);
+    if (text === undefined || text.length > MAX_SOURCE_BYTES) return undefined;
+    return analyzeSource(
+      relPath,
+      text,
+      settingsFor(this.config, relPath).allowComment.marker,
+    );
+  }
+
+  evaluate(
+    relPath: string,
+    baseRef = "HEAD",
+    text?: string,
+  ): { metrics?: FileMetrics; findings: Finding[] } {
+    const metrics = this.metrics(relPath, text);
+    if (!metrics) return { findings: [] };
+    const base = this.baselineMetrics(relPath, baseRef);
+    return {
+      metrics,
+      findings: evaluateFile(metrics, base, settingsFor(this.config, relPath)),
+    };
+  }
+
+  /** Included files: all of them, or only changed ones relative to `base`. */
+  files(scope: "all" | "changed", base = "HEAD", max = 20000): string[] {
+    let list: string[];
+    if (this.options.useGit && git.repoRoot(this.root)) {
+      list =
+        scope === "changed"
+          ? git.changedFiles(this.root, base)
+          : git.listFiles(this.root);
+    } else {
+      list = scope === "changed" ? [] : walk(this.root, max * 4);
+    }
+    return list
+      .map(normalizePath)
+      .filter((f) => this.includes(f) && fs.existsSync(path.join(this.root, f)))
+      .slice(0, max);
+  }
+
+  /** Estimated tokens to read a file plus its relative imports, `depth` levels deep. */
+  aiCost(relPath: string, depth = this.config.tokens.includeImports): number {
+    const seen = new Set<string>();
+    const visit = (rel: string, level: number): number => {
+      if (seen.has(rel)) return 0;
+      seen.add(rel);
+      const m = this.metrics(rel);
+      if (!m) return 0;
+      let total = m.fileTokens;
+      if (level < depth)
+        for (const spec of m.relativeImports) {
+          const target = this.resolveImport(rel, spec);
+          if (target) total += visit(target, level + 1);
+        }
+      return total;
+    };
+    return visit(relPath, 0);
+  }
+
+  private resolveImport(fromRel: string, spec: string): string | undefined {
+    const base = normalizePath(
+      path.posix.join(path.posix.dirname(fromRel), spec),
+    );
+    const candidates = [
+      base,
+      ...RESOLVE_EXT.map((e) => base + e),
+      ...RESOLVE_EXT.map((e) => `${base}/index${e}`),
+      // "./x.js" written in TS sources that compile to JS
+      ...(/\.[cm]?js$/.test(base)
+        ? RESOLVE_EXT.map((e) => base.replace(/\.[cm]?js$/, e))
+        : []),
+    ];
+    for (const c of candidates) {
+      const abs = this.absolute(c);
+      if (
+        abs &&
+        fs.existsSync(abs) &&
+        fs.statSync(abs).isFile() &&
+        !c.includes("node_modules/")
+      )
+        return c;
+    }
+    return undefined;
+  }
+
+  hotspotCounts(): Map<string, number> {
+    if (!this.options.useGit) return new Map();
+    try {
+      return git.commitCounts(this.root, this.config.hotspots.historyDays);
+    } catch {
+      return new Map();
+    }
+  }
+}
+
+export function loadConfig(root: string): LoadResult {
+  const file = path.join(root, CONFIG_FILE);
+  try {
+    const st = fs.lstatSync(file);
+    if (!st.isFile()) return resolveConfig(undefined);
+    if (st.size > MAX_CONFIG_BYTES) {
+      const r = resolveConfig(undefined);
+      r.errors.push(
+        `${CONFIG_FILE} is larger than ${MAX_CONFIG_BYTES / 1024} KB and was ignored`,
+      );
+      return r;
+    }
+    return resolveConfig(parseJsonc(fs.readFileSync(file, "utf8")));
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === "ENOENT")
+      return resolveConfig(undefined);
+    const r = resolveConfig(undefined);
+    r.errors.push(`${CONFIG_FILE}: ${(e as Error).message}`);
+    return r;
+  }
+}
+
+/** Fallback file listing when git is unavailable: skips dot folders and node_modules. */
+function readDir(root: string, dir: string): fs.Dirent[] {
+  try {
+    return fs.readdirSync(path.join(root, dir), { withFileTypes: true });
+  } catch {
+    return [];
+  }
+}
+
+function walk(root: string, max: number): string[] {
+  const out: string[] = [];
+  const stack = [""];
+  while (stack.length && out.length < max) {
+    const dir = stack.pop() as string;
+    const entries = readDir(root, dir).filter((e) => !e.name.startsWith(".") && e.name !== "node_modules");
+    for (const e of entries) {
+      const rel = dir ? `${dir}/${e.name}` : e.name;
+      if (e.isDirectory()) stack.push(rel);
+      else if (e.isFile()) out.push(rel);
+    }
+  }
+  return out;
+}

@@ -1,0 +1,14 @@
+src/**
+test/**
+scripts/**
+out/**
+out-test/**
+node_modules/**
+docs/**
+.github/**
+**/*.map
+tsconfig*.json
+.gitignore
+*.vsix
+CONTRIBUTING.md
+SECURITY.md
