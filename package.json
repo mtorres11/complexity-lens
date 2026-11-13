@@ -195,7 +195,7 @@
     "@types/vscode": "^1.95.0",
     "@vscode/vsce": "^4.1.0",
     "esbuild": "^0.28.2",
-    "typescript": "~5.9.3"
+    "typescript": "~7.0.2"
   },
   "overrides": {
     "minimatch": "^11.0.1"
