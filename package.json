@@ -2,7 +2,7 @@
   "name": "complexity-lens",
   "displayName": "Complexity Lens",
   "description": "See code complexity and AI reading cost per file and function, and keep AI-generated code simple with an agent hook and a CI check.",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "publisher": "mtorres11",
   "license": "MIT",
   "author": {

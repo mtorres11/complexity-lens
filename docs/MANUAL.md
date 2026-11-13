@@ -1,6 +1,6 @@
 # Complexity Lens: user manual
 
-**Version 0.2.0** · Created by Marco Torres C · [Repository](https://github.com/mtorres11/complexity-lens)
+**Version 0.2.1** · Created by Marco Torres C · [Repository](https://github.com/mtorres11/complexity-lens)
 
 Complexity Lens shows **how complex your code is** and **how much it costs an AI agent to read**, for every file and
 function. It then keeps AI-written code simple with an **agent hook** (feedback right after each edit) and a
@@ -185,7 +185,7 @@ Sort   [ Payoff ▾ ]          ← Payoff · Context load · Complexity · Churn
 Repo   [ Rules… ]  [ Agent hook… ]
 234 file(s) · 456 problem(s) · context ≈1.9M tokens
 
-┌ libs/tools/src/finder/findCompanies.ts        FIX  🔍 ┐
+┌ libs/tools/src/finder/findCompanies.ts     FIX  🔍 🛠 ┐
 │ Cognitive 41 │ Cyclomatic 28 │ Nesting 6               │
 │ Churn 14×    │ Coupling Ca 9·Ce 18 │ Cohesion LCOM 3   │
 │ Context load ≈38k tok                                  │
@@ -193,7 +193,7 @@ Repo   [ Rules… ]  [ Agent hook… ]
 └────────────────────────────────────────────────────────┘
 ```
 
-- **File name:** opens the file. **🔍:** opens the deep analysis (below).
+- **File name:** opens the file. **🔍:** opens the deep analysis (below). **🛠:** opens **What to fix** for this file only.
 - **Badge:** FIX / PLAN / LEAVE / OK ([verdicts](#verdicts)). Hover it for what it means.
 - **Seven bars**, each coloured **green → mustard → red** as the value approaches and passes its limit. Hover for exact values.
   The **Churn** bar fills up towards the hotspot threshold (`verdicts.fixCommits`).
@@ -212,7 +212,8 @@ Repo   [ Rules… ]  [ Agent hook… ]
 | **Suggested split** | When the file is big and has unrelated groups: which functions go in which new file, and the tokens saved per edit |
 | **Actions** | ✨ Fix with AI · 🎫 Ticket draft · 🧹 Chore · Accept… · Ignore |
 
-Use **← Back** and the breadcrumb (`Project › file › function`) to move around.
+Use **← Back** and the breadcrumb (`Project › file › function`) to move around. Every file path and line number is a link
+that opens the file at that place; next to related files, a small **🔍** opens their deep analysis.
 
 ### Function screen
 
@@ -228,15 +229,21 @@ Use **← Back** and the breadcrumb (`Project › file › function`) to move ar
 
 - **Compared with:** the last commit, or a branch (e.g. `main`): then everything changed since your branch forked from it.
 - A headline: *⚠ N file(s) to fix before the PR* or *✓ Your change didn't make anything more complex*.
-- Each file that got worse, with what got worse, why it matters, and **Fix with AI / Accept… / Open**.
+- **Search** (🔎) to show only matching changed files.
+- Each file that got worse, with what got worse, why it matters, and **Fix with AI / Accept…** (the file name opens the file).
 - Improvements (▼) and a count of changed files that are fine.
 - **✨ Fix all with AI** (one prompt for everything) and **📋 Copy PR summary** (for the pull request description).
 
 ### What to fix
 
+**Search** (🔎 at the top): type part of a path, or pick a file from the suggestions, to see only matching files.
+When the search names **one file** (or you came from a Report card's **🛠**), you also get that file's
+**functions to fix**, each with its advice and **✨ Fix with AI / 🧹 Chore / Accept…**. Press **✕** to show everything again;
+clicking the tab itself also shows everything.
+
 The whole repository, ranked by payoff, in three groups: **FIX** (open), **PLAN** and **LEAVE** (click to expand).
 Each item shows churn, dependents, tokens per edit and the hardest function, with **Fix with AI**, **🎫 Ticket draft**,
-**Ignore** and **Open**. At the bottom: **🎫 Ticket drafts for top 5** and **🧹 Chore list**.
+and **Ignore** (the file name opens the file). At the bottom: **🎫 Ticket drafts for top 5** and **🧹 Chore list**.
 **Ignore** hides a file on your machine only; ignored files are listed at the bottom and can be shown again.
 
 ### The actions

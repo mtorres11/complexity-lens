@@ -143,3 +143,16 @@ button.secondary:disabled { opacity: 0.5; cursor: default; }
 .advice li { margin: 2px 0; }
 .spark { display: inline-flex; align-items: flex-end; gap: 1px; height: 12px; width: 90px; vertical-align: middle; }
 .spark-bar { flex: 1; background: var(--warn); border-radius: 1px; min-height: 1px; }
+
+/* ---------- v0.2.1: search, per-file fixes ---------- */
+.searchbar { display: flex; align-items: center; gap: 4px; margin: 6px 0; }
+.search-icon { flex: none; color: var(--muted); }
+.search {
+  flex: 1; min-width: 0; height: 24px; box-sizing: border-box; padding: 2px 6px; font: inherit; border-radius: 2px;
+  background: var(--vscode-input-background); color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border, var(--border));
+}
+.search:focus { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
+a.mini { font-size: 0.85em; margin-left: 2px; text-decoration: none; }
+.fnfix { border: 1px solid var(--border); border-left: 3px solid var(--bad); border-radius: 4px; padding: 6px 8px; margin: 6px 0; background: var(--vscode-editor-background); }
+.fnfix-head { display: flex; align-items: baseline; gap: 6px; }

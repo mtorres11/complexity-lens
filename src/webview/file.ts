@@ -113,13 +113,13 @@ function churn(d: FileDetail): HTMLElement {
   );
 }
 
+/** Related files: the name opens the file, 🔍 opens its deep analysis. */
 const fileLinks = (paths: string[]) =>
-  paths
-    .slice(0, 12)
-    .flatMap((p) => [
-      link(p.split("/").pop() ?? p, () => openFile(p), { title: p }),
-      " ",
-    ]);
+  paths.slice(0, 12).flatMap((p) => [
+    link(p.split("/").pop() ?? p, { type: "open", path: p, line: 1 }, { title: `Open ${p}` }),
+    link("🔍", () => openFile(p), { class: "mini", title: `Deep analysis of ${p}` }),
+    " ",
+  ]);
 
 function couplingSection(d: FileDetail): HTMLElement {
   return section(
@@ -252,8 +252,6 @@ export function renderFile(d: FileDetail): HTMLElement[] {
       { class: "detail-head" },
       badge(d.verdict),
       h("span", { class: "muted" }, ` · ${d.reason}`),
-      h("span", { class: "spacer" }),
-      button("Open file", () => send({ type: "open", path: d.path, line: 1 })),
     ),
     h("div", { class: "why big" }, d.why),
     metrics(d),

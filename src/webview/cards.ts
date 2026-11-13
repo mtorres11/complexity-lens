@@ -2,7 +2,7 @@
 
 import type { FileSummary, Item } from "../core/insights";
 import { badge, box, fmtTokens, h, link } from "./dom";
-import { openFile, state, toggle } from "./state";
+import { fixFile, openFile, state, toggle } from "./state";
 
 const lim = (l: number | null, label = "limit") =>
   l === null ? "" : `, ${label} ${l}`;
@@ -104,28 +104,22 @@ function delta(r: FileSummary): HTMLElement | null {
   );
 }
 
-/** Header row used by every list: file name (opens the file), verdict and 🔍 (deep analysis). */
-export function fileHeader(r: FileSummary): HTMLElement {
+const iconButton = (text: string, title: string, run: () => void) =>
+  h("button", { class: "icon-btn", title, "aria-label": title, onclick: (e: Event) => (e.stopPropagation(), run()) }, text);
+
+/**
+ * Header row used by every list: the file name (opens the file), the verdict, 🔍 (deep
+ * analysis) and, on Report cards, 🛠 (What to fix for this file only).
+ */
+export function fileHeader(r: FileSummary, withFix = false): HTMLElement {
   return h(
     "div",
     { class: "card-top" },
-    link(
-      r.path,
-      { type: "open", path: r.path, line: 1 },
-      { class: "path", title: `Open ${r.path}` },
-    ),
+    link(r.path, { type: "open", path: r.path, line: 1 }, { class: "path", title: `Open ${r.path}` }),
     delta(r),
     badge(r.verdict),
-    h(
-      "button",
-      {
-        class: "icon-btn",
-        title: "Deep analysis of this file",
-        "aria-label": "Deep analysis",
-        onclick: (e: Event) => (e.stopPropagation(), openFile(r.path)),
-      },
-      "🔍",
-    ),
+    iconButton("🔍", "Deep analysis of this file", () => openFile(r.path)),
+    withFix ? iconButton("🛠", "What to fix in this file", () => fixFile(r.path)) : null,
   );
 }
 
@@ -137,7 +131,7 @@ export function reportCard(r: FileSummary): HTMLElement {
   return h(
     "div",
     { class: `card v-${r.verdict.toLowerCase()}-edge` },
-    fileHeader(r),
+    fileHeader(r, true),
     metricGrid(r),
     items.length
       ? h(

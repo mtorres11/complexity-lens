@@ -172,7 +172,7 @@ export class DataBuilder {
       rows
         .filter((r) => r.verdict === v)
         .sort(SORTERS.payoff)
-        .slice(0, 100);
+        .slice(0, 300);
     return {
       data: {
         todo: { fix: by("FIX"), plan: by("PLAN"), leave: by("LEAVE"), ignored },

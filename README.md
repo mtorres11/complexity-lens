@@ -15,10 +15,10 @@ Created by **Marco Torres C** · <https://github.com/mtorres11/complexity-lens>
 
 | Piece | What it does |
 |---|---|
-| **Report** | Every changed file (or the whole repo) with a **FIX / PLAN / LEAVE / OK** verdict and seven bars (cognitive, cyclomatic, nesting, churn, coupling, cohesion, context load), coloured green → mustard → red. Click a file to open it, or 🔍 for its deep analysis. |
+| **Report** | Every changed file (or the whole repo) with a **FIX / PLAN / LEAVE / OK** verdict and seven bars (cognitive, cyclomatic, nesting, churn, coupling, cohesion, context load), coloured green → mustard → red. Click a file to open it, 🔍 for its deep analysis, or 🛠 for its fixes only. |
 | **Deep analysis** | Per file: why it matters, every metric against its limit, churn trend, who depends on it, functions, a suggested split. Per function: where the complexity is (line by line) and how to fix it. |
 | **Your change** | Did my change make anything more complex? With *Fix all with AI* and *Copy PR summary*. |
-| **What to fix** | The whole repo ranked by payoff: complex × changed often × depended on. FIX / PLAN / LEAVE. |
+| **What to fix** | The whole repo ranked by payoff: complex × changed often × depended on. FIX / PLAN / LEAVE. Search for a file to see only its fixes, down to each function. |
 | **Actions** | ✨ Fix with AI (a ready prompt), 🎫 Ticket draft (copy or save as Markdown), 🧹 Chore, Accept (adds a `complexity-ok` comment), Ignore. |
 | **Inline scores** | A small line above each function: `complexity 18 ⚠ · 62 lines · nesting 3`. |
 | **Status bar** | The current file at a glance: highest complexity and estimated tokens. |

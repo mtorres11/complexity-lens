@@ -73,9 +73,9 @@ function header(d: FileDetail, f: FunctionDetail): HTMLElement {
     "div",
     { class: "detail-head" },
     h("span", { class: f.over ? "bad-text" : "ok-text" }, f.over ? "✖ Hard to follow" : "✓ Within the limits"),
-    h("span", { class: "muted" }, ` · line ${f.line} · ${f.lines} lines`),
-    h("span", { class: "spacer" }),
-    button("Open line", () => send({ type: "open", path: d.path, line: f.line })),
+    h("span", { class: "muted" }, " · "),
+    link(`line ${f.line}`, { type: "open", path: d.path, line: f.line }, { title: "Open at this line" }),
+    h("span", { class: "muted" }, ` · ${f.lines} lines`),
   );
 }
 

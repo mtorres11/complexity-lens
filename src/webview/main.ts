@@ -5,7 +5,8 @@ import { reportCard } from "./cards";
 import { button, fmtTokens, h, link, select, send } from "./dom";
 import { renderFile } from "./file";
 import { renderFunction } from "./fn";
-import { back, home, state, top } from "./state";
+import { back, home, requestDetail, state, top } from "./state";
+import { restoreSearchFocus } from "./search";
 import { renderChange, renderTodo } from "./tabs";
 
 const app = document.getElementById("app") as HTMLElement;
@@ -15,6 +16,14 @@ const TAB_LABELS: [string, string][] = [
   ["change", "Your change"],
   ["todo", "What to fix"],
 ];
+
+/** A tab opened directly shows everything: the search filter is cleared. */
+function openTab(id: "report" | "change" | "todo"): void {
+  state.filter = "";
+  state.pinned = undefined;
+  home();
+  send({ type: "tab", value: id });
+}
 
 function tabs(): HTMLElement {
   const u = state.update;
@@ -27,7 +36,7 @@ function tabs(): HTMLElement {
         {
           class: `tab${u?.tab === id && !state.stack.length ? " on" : ""}`,
           role: "tab",
-          onclick: () => (home(), send({ type: "tab", value: id as "report" })),
+          onclick: () => openTab(id as "report"),
         },
         label,
       ),
@@ -161,7 +170,7 @@ function crumbs(): HTMLElement {
     parts.push(
       " › ",
       s.kind === "file"
-        ? h("span", { class: "crumb-file", title: s.path }, s.path)
+        ? link(s.path, { type: "open", path: s.path, line: 1 }, { class: "crumb-file", title: `Open ${s.path}` })
         : link(s.path.split("/").pop() ?? s.path, back, { title: s.path }),
     );
     if (s.kind === "function") parts.push(" › ", h("span", null, s.fn));
@@ -215,7 +224,10 @@ function body(): HTMLElement[] {
 
 function render(): void {
   if (!state.update) return;
+  state.rendering = true;
   app.replaceChildren(tabs(), ...body(), footer());
+  state.rendering = false;
+  restoreSearchFocus();
 }
 state.render = render;
 
@@ -230,10 +242,12 @@ window.addEventListener("message", (e: MessageEvent<ToWebview>) => {
   else if (m?.type === "detailError") state.detailErrors.set(m.path, m.text);
   else if (m?.type === "update") {
     state.update = m;
-    if (!m.loading) state.details.clear(); // fresh data: re-request details when opened again
-    for (const s of state.stack)
-      if (!state.details.has(s.path) && !m.loading)
-        send({ type: "detail", path: s.path });
+    if (!m.loading) {
+      // Fresh data: details are asked for again when they are shown.
+      state.details.clear();
+      state.requested.clear();
+    }
+    if (!m.loading) for (const s of state.stack) requestDetail(s.path);
   } else return;
   render();
 });
