@@ -1,176 +1,325 @@
-// The sidebar webview. All data shown comes from the extension; the webview only sends
-// back simple, validated requests (change scope/sort, open a file at a line).
+// The sidebar webview controller. All data shown comes from the extension; the webview only
+// sends back small, validated requests (switch tab, open a file, run an action on a file).
 
 import { randomBytes } from "crypto";
 import * as vscode from "vscode";
+import * as git from "../core/git";
 import type { Project } from "../core/project";
-import { buildReport, Report, Scope, Sort } from "./report";
+import type { About } from "./about";
+import { runAction, runBatch } from "./actions";
+import { DataBuilder, Progress } from "./data";
+import {
+  ACTIONS,
+  BATCHES,
+  FromWebview,
+  Scope,
+  SCOPES,
+  Sort,
+  SORTS,
+  TABS,
+  ToWebview,
+  UpdateMessage,
+} from "./protocol";
 
-export interface About {
-  author: string;
-  version: string;
-  /** https URL of the source repository, or "" if unknown. */
-  repoUrl: string;
+export interface Current {
+  project?: Project;
+  rel?: string;
+  errors: string[];
+  trusted: boolean;
 }
 
-/** Author, version and repo link from the extension's package.json. */
-export function aboutFrom(pkg: { author?: unknown; version?: unknown; repository?: unknown }): About {
-  const author = typeof pkg.author === "string" ? pkg.author : ((pkg.author as { name?: unknown } | undefined)?.name ?? "");
-  const repo = typeof pkg.repository === "string" ? pkg.repository : ((pkg.repository as { url?: unknown } | undefined)?.url ?? "");
-  const url = String(repo).replace(/^git\+/, "").replace(/\.git$/, "");
-  return { author: String(author), version: String(pkg.version ?? ""), repoUrl: /^https:\/\/[^\s]+$/.test(url) ? url : "" };
-}
-
-const SCOPES: Scope[] = ["changed", "repo", "current"];
-const SORTS: Sort[] = ["aiCost", "complexity", "hotspot", "name"];
+const oneOf = <T extends string>(v: unknown, list: readonly T[]): v is T =>
+  typeof v === "string" && (list as readonly string[]).includes(v);
 
 export class Sidebar implements vscode.WebviewViewProvider {
   private view?: vscode.WebviewView;
-  private report?: Report;
   private generation = 0;
   private timer?: NodeJS.Timeout;
+  private builders = new WeakMap<Project, DataBuilder>();
+  /** Paths shown in the last update (only these can be opened or acted on). */
+  private known = new Set<string>();
+  private refs: string[] = [];
 
   constructor(
-    private readonly extensionUri: vscode.Uri,
-    private readonly current: () => {
-      project?: Project;
-      rel?: string;
-      errors: string[];
-      trusted: boolean;
-    },
+    private readonly ctx: vscode.ExtensionContext,
+    private readonly current: () => Current,
     private readonly about: About,
   ) {}
 
   resolveWebviewView(view: vscode.WebviewView): void {
     this.view = view;
-    const media = vscode.Uri.joinPath(this.extensionUri, "media");
+    const media = vscode.Uri.joinPath(this.ctx.extensionUri, "media");
     view.webview.options = { enableScripts: true, localResourceRoots: [media] };
     view.webview.html = this.html(view.webview, media);
-    view.webview.onDidReceiveMessage((m) => this.onMessage(m));
+    view.webview.onDidReceiveMessage(
+      (m) => void this.onMessage(m as FromWebview),
+    );
     view.onDidChangeVisibility(() => view.visible && this.refreshSoon(0));
   }
 
-  /** Debounced refresh (e.g. after saves). */
-  refreshSoon(delayMs = 400): void {
+  refreshSoon(delayMs = 400, invalidate = false): void {
+    if (invalidate) this.builders = new WeakMap();
     if (this.timer) clearTimeout(this.timer);
     this.timer = setTimeout(() => void this.refresh(), delayMs);
   }
 
-  private settings() {
+  private builder(p: Project): DataBuilder {
+    let b = this.builders.get(p);
+    if (!b) {
+      const max = Math.min(
+        20000,
+        Math.max(
+          100,
+          vscode.workspace
+            .getConfiguration("complexityLens")
+            .get<number>("maxFiles", 3000),
+        ),
+      );
+      b = new DataBuilder(p, max);
+      this.builders.set(p, b);
+    }
+    return b;
+  }
+
+  private state() {
     const c = vscode.workspace.getConfiguration("complexityLens");
     const scope = c.get<string>("scope", "changed");
-    const sort = c.get<string>("sort", "aiCost");
+    const sort = c.get<string>("sort", "payoff");
+    const tab = this.ctx.workspaceState.get<string>("tab", "report");
+    const compare = this.ctx.workspaceState.get<string>("compare", "HEAD");
     return {
-      scope: (SCOPES as string[]).includes(scope)
-        ? (scope as Scope)
-        : "changed",
-      sort: (SORTS as string[]).includes(sort) ? (sort as Sort) : "aiCost",
-      maxFiles: Math.min(20000, Math.max(100, c.get<number>("maxFiles", 3000))),
+      tab: oneOf(tab, TABS) ? tab : "report",
+      scope: oneOf(scope, SCOPES) ? scope : "changed",
+      sort: oneOf(sort, SORTS) ? sort : "payoff",
+      compare:
+        compare === "HEAD" || this.refs.includes(compare) ? compare : "HEAD",
     };
+  }
+
+  private ignoredKey(p: Project) {
+    return `ignored:${p.root}`;
+  }
+
+  private progress(gen: number): Progress {
+    return {
+      onProgress: (done, total) =>
+        gen === this.generation &&
+        void this.post({ type: "progress", done, total }),
+      isCancelled: () => gen !== this.generation,
+    };
+  }
+
+  private post(m: ToWebview): void {
+    void this.view?.webview.postMessage(m);
+  }
+
+  private base(
+    c: Current,
+    st: ReturnType<Sidebar["state"]>,
+  ): Omit<UpdateMessage, "loading" | "data" | "truncated"> {
+    return {
+      type: "update",
+      ...st,
+      refs: this.refs,
+      trusted: c.trusted,
+      configErrors: c.errors,
+      about: {
+        author: this.about.author,
+        version: this.about.version,
+        hasRepo: !!this.about.repoUrl,
+      },
+      fixCommits: c.project?.config.verdicts.fixCommits ?? 6,
+    };
+  }
+
+  /** Builds the data for the current tab. */
+  private load(project: Project, st: ReturnType<Sidebar["state"]>, rel: string | undefined, p: Progress) {
+    const b = this.builder(project);
+    if (st.tab === "change") return b.change(st.compare, p);
+    if (st.tab === "todo") return b.todo(this.ctx.workspaceState.get<string[]>(this.ignoredKey(project), []), p);
+    return b.report(st.scope, st.sort, rel, p);
   }
 
   async refresh(): Promise<void> {
     if (!this.view?.visible) return;
     const gen = ++this.generation;
-    const { project, rel, errors, trusted } = this.current();
-    const s = this.settings();
-    const base = {
-      type: "update",
-      scope: s.scope,
-      sort: s.sort,
-      configErrors: errors,
-      trusted,
-      about: { author: this.about.author, version: this.about.version, hasRepo: !!this.about.repoUrl },
-    };
-    if (!project) {
-      void this.view.webview.postMessage({
-        ...base,
-        empty: "Open a folder to see its complexity.",
-      });
-      return;
-    }
-    void this.view.webview.postMessage({ ...base, loading: true });
+    const c = this.current();
+    if (c.project && c.trusted) this.refs = safeBranches(c.project.root);
+    const st = this.state();
+    const base = this.base(c, st);
+    if (!c.project) return this.post({ ...base, loading: false, data: {}, truncated: false, empty: "Open a folder to see its complexity." });
+    this.post({ ...base, loading: true, data: {}, truncated: false });
     try {
-      const report = await buildReport(project, {
-        scope: s.scope,
-        sort: s.sort,
-        maxFiles: s.maxFiles,
-        currentFile: rel,
-        onProgress: (done, total) => {
-          if (gen === this.generation) void this.view?.webview.postMessage({ type: "progress", done, total });
-        },
-        isCancelled: () => gen !== this.generation,
-      });
-      if (!report || gen !== this.generation) return;
-      this.report = report;
-      void this.view.webview.postMessage({ ...base, report });
+      const out = await this.load(c.project, st, c.rel, this.progress(gen));
+      if (!out || gen !== this.generation) return;
+      this.known = collectPaths(out.data);
+      this.post({ ...base, loading: false, data: out.data, truncated: out.truncated });
     } catch (e) {
-      if (gen === this.generation)
-        void this.view.webview.postMessage({
-          ...base,
-          error: (e as Error).message,
-        });
+      if (gen === this.generation) this.post({ ...base, loading: false, data: {}, truncated: false, error: (e as Error).message });
     }
   }
 
-  private async onMessage(m: {
-    type?: unknown;
-    value?: unknown;
-    path?: unknown;
-    line?: unknown;
-  }): Promise<void> {
-    const c = vscode.workspace.getConfiguration("complexityLens");
+  // complexity-ok: message dispatcher, one case per message type; each case delegates to a method
+  private async onMessage(m: FromWebview): Promise<void> {
+    if (!m || typeof m !== "object") return;
+    const c = this.current();
     switch (m.type) {
       case "ready":
       case "refresh":
         return this.refresh();
+      case "tab":
+        if (oneOf(m.value, TABS))
+          await this.ctx.workspaceState.update("tab", m.value);
+        return this.refresh();
+      case "compare":
+        if (m.value === "HEAD" || this.refs.includes(m.value))
+          await this.ctx.workspaceState.update("compare", m.value);
+        return this.refresh();
       case "scope":
-        if ((SCOPES as unknown[]).includes(m.value))
-          await c.update("scope", m.value, vscode.ConfigurationTarget.Global);
-        return;
       case "sort":
-        if ((SORTS as unknown[]).includes(m.value))
-          await c.update("sort", m.value, vscode.ConfigurationTarget.Global);
-        return;
+        return this.setSetting(m.type, m.value);
       case "open":
-        return this.open(m.path, m.line);
+        return this.open(c, m.path, m.line);
+      case "detail":
+        return this.sendDetail(c, m.path);
+      case "action":
+        return this.action(c, m);
+      case "batch":
+        return this.batch(c, m.kind);
       case "openConfig":
         return void vscode.commands.executeCommand("complexityLens.openConfig");
-      case "openRepo":
-        // Only the https repo URL from the extension's own package.json, never a URL from the webview.
-        if (this.about.repoUrl) void vscode.env.openExternal(vscode.Uri.parse(this.about.repoUrl));
-        return;
       case "installHook":
         return void vscode.commands.executeCommand(
           "complexityLens.installHook",
         );
+      case "openRepo":
+        // Only the https repo URL from the extension's own package.json, never a URL from the webview.
+        if (this.about.repoUrl)
+          void vscode.env.openExternal(vscode.Uri.parse(this.about.repoUrl));
+        return;
     }
   }
 
-  /** Opens a file from the current report only; never an arbitrary path from the webview. */
-  private async open(p: unknown, line: unknown): Promise<void> {
-    const { project } = this.current();
-    const row = this.report?.rows.find((r) => r.path === p);
-    const abs = row && project?.absolute(row.path);
-    if (!abs) return;
+  private async setSetting(
+    key: "scope" | "sort",
+    value: unknown,
+  ): Promise<void> {
+    const ok = key === "scope" ? oneOf(value, SCOPES) : oneOf(value, SORTS);
+    if (ok)
+      await vscode.workspace
+        .getConfiguration("complexityLens")
+        .update(key, value as Scope | Sort, vscode.ConfigurationTarget.Global);
+  }
+
+  /** Paths must be repo files that are in view or reachable from a shown detail. */
+  private allowed(c: Current, p: unknown): p is string {
+    return (
+      typeof p === "string" &&
+      !!c.project &&
+      (this.known.has(p) || c.project.includes(p)) &&
+      !!c.project.absolute(p)
+    );
+  }
+
+  private async open(c: Current, p: unknown, line: unknown): Promise<void> {
+    if (!this.allowed(c, p) || !c.project) return;
+    const abs = c.project.absolute(p) as string;
     const n =
       typeof line === "number" && Number.isInteger(line) && line > 0
         ? line - 1
         : 0;
-    const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(abs));
-    await vscode.window.showTextDocument(doc, {
-      selection: new vscode.Range(n, 0, n, 0),
-    });
+    await vscode.window.showTextDocument(
+      await vscode.workspace.openTextDocument(vscode.Uri.file(abs)),
+      { selection: new vscode.Range(n, 0, n, 0) },
+    );
+  }
+
+  private async sendDetail(c: Current, p: unknown): Promise<void> {
+    if (!this.allowed(c, p) || !c.project) return;
+    const d = await this.builder(c.project).detail(
+      p,
+      this.progress(this.generation),
+    );
+    if (!d)
+      return this.post({
+        type: "detailError",
+        path: p,
+        text: "This file can't be analysed.",
+      });
+    for (const x of [...d.dependents, ...d.internalImports]) this.known.add(x);
+    this.post({ type: "detail", detail: d });
+  }
+
+  private deps(project: Project) {
+    const b = this.builder(project);
+    const p = this.progress(this.generation);
+    const key = this.ignoredKey(project);
+    const ignored = () => this.ctx.workspaceState.get<string[]>(key, []);
+    return {
+      project,
+      detail: (rel: string) => b.detail(rel, p),
+      ignored,
+      setIgnored: async (list: string[]) => {
+        await this.ctx.workspaceState.update(key, list);
+        this.refreshSoon(0);
+      },
+      changeItems: () => b.changeItems(this.state().compare, p),
+      topFix: () => b.topFix(p, ignored()),
+    };
+  }
+
+  private async action(
+    c: Current,
+    m: Extract<FromWebview, { type: "action" }>,
+  ): Promise<void> {
+    if (!c.project || !oneOf(m.kind, ACTIONS) || !this.allowed(c, m.path))
+      return;
+    if (m.kind === "accept" && !c.trusted)
+      return void vscode.window.showWarningMessage(
+        "Complexity Lens: trust this workspace to edit files.",
+      );
+    await runAction(
+      this.deps(c.project),
+      m.kind,
+      m.path,
+      typeof m.fn === "string" ? m.fn : undefined,
+    );
+  }
+
+  private async batch(c: Current, kind: unknown): Promise<void> {
+    if (c.project && oneOf(kind, BATCHES))
+      await runBatch(this.deps(c.project), kind);
   }
 
   private html(webview: vscode.Webview, media: vscode.Uri): string {
     const nonce = randomBytes(24).toString("base64url");
     const css = webview.asWebviewUri(vscode.Uri.joinPath(media, "main.css"));
-    const js = webview.asWebviewUri(vscode.Uri.joinPath(media, "main.js"));
+    const js = webview.asWebviewUri(
+      vscode.Uri.joinPath(media, "dist", "webview.js"),
+    );
     return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource}; script-src 'nonce-${nonce}';">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="stylesheet" href="${css}"><title>Complexity Lens</title></head>
 <body><div id="app"></div><script nonce="${nonce}" src="${js}"></script></body></html>`;
   }
+}
+
+function safeBranches(root: string): string[] {
+  try {
+    return git.listBranches(root);
+  } catch {
+    return [];
+  }
+}
+
+function collectPaths(data: import("./protocol").ViewData): Set<string> {
+  const rows = [
+    ...(data.report ?? []),
+    ...(data.change?.items ?? []),
+    ...(data.todo?.fix ?? []),
+    ...(data.todo?.plan ?? []),
+    ...(data.todo?.leave ?? []),
+  ];
+  return new Set([...rows.map((r) => r.path), ...(data.todo?.ignored ?? [])]);
 }

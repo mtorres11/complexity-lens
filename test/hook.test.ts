@@ -111,9 +111,13 @@ test("post-edit: ignores files outside the repo or not included", () => {
   );
 });
 
+const edit = (dir: string, rel: string, session: string) =>
+  postEdit({ cwd: dir, session_id: session, tool_name: "Edit", tool_input: { file_path: path.join(dir, rel) } });
+
 test("stop: blocks up to maxRetries, then reports to the user and resets", () => {
   const dir = tempRepo({ hook: { onFinish: "block", maxRetries: 2 } });
   fs.writeFileSync(path.join(dir, "src/a.ts"), COMPLEX);
+  edit(dir, "src/a.ts", "s1");
   const input = { cwd: dir, session_id: "s1" };
   const r1 = onFinish(input) as { decision?: string; reason?: string };
   assert.equal(r1.decision, "block");
@@ -127,12 +131,21 @@ test("stop: blocks up to maxRetries, then reports to the user and resets", () =>
   assert.equal(r4.decision, "block", "counter was reset after reporting");
 });
 
+test("stop: only judges files this session edited (other agents' changes are ignored)", () => {
+  const dir = tempRepo({ hook: { onFinish: "block" } });
+  fs.writeFileSync(path.join(dir, "src/a.ts"), COMPLEX); // changed by "someone else"
+  assert.equal(onFinish({ cwd: dir, session_id: "mine" }), undefined, "nothing edited in this session");
+  fs.writeFileSync(path.join(dir, "src/b.ts"), "export const b = 1;\n");
+  edit(dir, "src/b.ts", "mine");
+  assert.equal(onFinish({ cwd: dir, session_id: "mine" }), undefined, "own file is clean");
+  edit(dir, "src/a.ts", "other");
+  assert.equal((onFinish({ cwd: dir, session_id: "other" }) as { decision?: string }).decision, "block");
+});
+
 test("stop: clean changes finish normally; allow comment is respected", () => {
   const dir = tempRepo({ hook: { onFinish: "block" } });
   assert.equal(onFinish({ cwd: dir, session_id: "s" }), undefined);
-  fs.writeFileSync(
-    path.join(dir, "src/a.ts"),
-    `// complexity-ok: lookup table generator\n${COMPLEX}`,
-  );
+  fs.writeFileSync(path.join(dir, "src/a.ts"), `// complexity-ok: lookup table generator\n${COMPLEX}`);
+  edit(dir, "src/a.ts", "s");
   assert.equal(onFinish({ cwd: dir, session_id: "s" }), undefined);
 });

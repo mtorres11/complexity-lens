@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Version assessed | 0.1.0 |
+| Version assessed | 0.2.0 |
 | Date | 2026-11-12 |
 | Scope | Extension (`src/extension.ts`, `src/vscode/`), checker (`src/core/`, `src/cli/`), webview (`media/`), manifest, build and release pipeline, dependencies |
 | Result | No open high or medium findings. 0 known dependency vulnerabilities. No runtime dependencies outside the bundle. |
@@ -36,7 +36,10 @@
 | `complexity-lens.json` | Repo root | Only via the "Open or Create Repo Config" command or `init`; never overwrites an existing file |
 | Hook entries | The agent settings file the user chooses (inside the repo, `.json` only) | Only after a modal showing the exact JSON |
 | Checker copy | `~/.complexity-lens/cli.js` (folder `0700`) | On hook install; refreshed on activation only if it already exists and carries the Complexity Lens marker |
-| Stop-hook retry counter | `.git/complexity-lens/stop-<hash>.json` (`0600`) | During agent sessions; deleted when clean |
+| Agent session state (files the session edited, retry counter) | `.git/complexity-lens/session-<hash>.json` (`0600`) | During agent sessions |
+| Ticket drafts | A Markdown file the user picks in a save dialog | Only when the user chooses *Save as Markdown file…* |
+| `// complexity-ok: <reason>` comment | Above the chosen function | Only via *Accept…*, after the user types the reason; disabled in Restricted Mode |
+| Ignored files list | VS Code workspace state (local) | Only via *Ignore* |
 
 ## 2. Threat model and controls
 
@@ -48,6 +51,8 @@
 | **Regex denial of service** | Patterns are converted to regular expressions with every non-pattern character escaped; no user-supplied regex. The allow-comment marker is restricted to `[a-z0-9-]`. |
 | **Reading outside the repo / symlink tricks** | All paths are resolved and checked to stay inside the repo root; files are read only if `lstat` says they're regular files (no symlinks), and are capped at 2 MB. |
 | **Hook input abuse** | The hook reads at most 1 MB of JSON, only reacts to `Write`/`Edit`/`MultiEdit`, requires an absolute file path inside the repo and included by the config, and fails open (silent, exit 0) on any error. |
+| **Git history** | Churn reads `git log --numstat` (same safe git flags). Author emails are only counted per file in memory; they're never stored, shown or exported. |
+| **Clipboard** | Prompts, tickets and summaries are built in the extension host from its own analysis and written only when the user clicks a button. |
 | **Agent loops** | `onFinish: "block"` is capped by `maxRetries` (max 10, default 2), with a per-session counter, then reports to the user instead. |
 | **Hook installer abuse** | Disabled in Restricted Mode. Shows the exact JSON and target file in a modal before writing. Merges into existing settings without removing anything, and refuses to touch a settings file that isn't valid JSON. The hook command is a fixed string with no repo data interpolated, and is guarded so it's a no-op when the checker isn't installed. Never overwrites a `~/.complexity-lens/cli.js` it didn't create. |
 | **XSS in the sidebar** (file paths, function names) | DOM built with `textContent`/`createElement` only. CSP `default-src 'none'`, script by nonce (`crypto.randomBytes`), styles from the extension only. |

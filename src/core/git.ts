@@ -161,3 +161,19 @@ export function commitCounts(root: string, days: number): Map<string, number> {
   for (const f of lines(out)) counts.set(f, (counts.get(f) ?? 0) + 1);
   return counts;
 }
+
+/**
+ * Raw `git log --numstat` for the last `days` days: a header line per commit
+ * ("\x01<unix time>\t<author email>") followed by "added\tdeleted\tpath" lines.
+ */
+export function logNumstat(root: string, days: number): string {
+  if (!hasCommit(root, "HEAD")) return "";
+  return git(root, ["log", `--since=${Math.max(1, Math.floor(days))}.days`, "--numstat", "--format=%x01%at%x09%aE", "--no-renames"]);
+}
+
+/** Local and remote branch names (for the "Compared with" list), capped. */
+export function listBranches(root: string, max = 200): string[] {
+  if (!hasCommit(root, "HEAD")) return [];
+  const out = git(root, ["for-each-ref", "--format=%(refname:short)", `--count=${max}`, "refs/heads", "refs/remotes"]);
+  return lines(out).filter((r) => isSafeRef(r) && !r.endsWith("/HEAD"));
+}

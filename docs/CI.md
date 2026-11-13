@@ -17,7 +17,7 @@ jobs:
   complexity:
     runs-on: ubuntu-latest
     env:
-      CL_VERSION: v0.1.0
+      CL_VERSION: v0.2.0
     steps:
       - uses: actions/checkout@v4
         with:

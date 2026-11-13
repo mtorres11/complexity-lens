@@ -1,6 +1,6 @@
 # Complexity Lens: user manual
 
-**Version 0.1.1** · Created by Marco Torres C · [Repository](https://github.com/mtorres11/complexity-lens)
+**Version 0.2.0** · Created by Marco Torres C · [Repository](https://github.com/mtorres11/complexity-lens)
 
 Complexity Lens shows **how complex your code is** and **how much it costs an AI agent to read**, for every file and
 function. It then keeps AI-written code simple with an **agent hook** (feedback right after each edit) and a
@@ -93,13 +93,18 @@ Tip: right-click the icon → **Move To → Secondary Side Bar** to keep it on t
 ## 3. Five-minute tour
 
 1. Open a TypeScript or JavaScript repository and click the **magnifier** in the Activity Bar.
-2. **Scope: Changed files** lists files changed since the last commit. Edit any function and it appears.
-3. Switch **Scope** to **Whole repo** and **Sort** to **Complexity**. Your most complicated files are now at the top.
-4. Click a file's **▸ N problem(s)** to expand it, then click **line 42** to jump to the problem.
-5. In the editor, look above each function: `complexity 18 ⚠ · 62 lines · nesting 3`.
-6. Look at the **status bar** for the current file's highest complexity and AI cost. Click an inline score for the full breakdown.
-7. Click **Rules…** → pick **recommended** to create `complexity-lens.json`, then commit it.
-8. If you use an AI coding agent with command hooks, click **Agent hook…** and follow the prompts (see [Tutorial B](#10-tutorial-b-keep-an-ai-agents-code-simple-agent-hook)).
+2. The sidebar has three tabs: **Report** (every file with its numbers), **Your change** (is my change OK?) and
+   **What to fix** (a ranked to-do list).
+3. On **Report**, set **Scope: Whole repo** and **Sort: Payoff**. The files most worth fixing are at the top, each with a
+   **FIX / PLAN / LEAVE / OK** badge and seven bars.
+4. Click a **file name** to open it, or its **🔍** for the deep analysis: why it matters, every metric against its limit,
+   churn, who depends on it, its functions, a suggested split, and action buttons.
+5. In the deep analysis, click a **function** to see exactly **where the complexity is** (line by line) and **how to fix it**.
+6. Press **✨ Fix with AI** to copy a ready-made refactoring prompt, or **🎫 Ticket draft** for a ticket you can paste or save.
+7. Before a pull request, open **Your change**: it says whether your change made anything more complex, and gives you
+   **Fix all with AI** and **Copy PR summary**.
+8. Click **Rules…** → **recommended** to create `complexity-lens.json`, and **Agent hook…** to connect an AI agent
+   (see [Tutorial B](#10-tutorial-b-keep-an-ai-agents-code-simple-agent-hook)).
 
 ---
 
@@ -110,6 +115,7 @@ Tip: right-click the icon → **Move To → Secondary Side Bar** to keep it on t
 | Metric | What it means | Default limit (recommended) |
 | --- | --- | --- |
 | **Cognitive complexity** | How hard the function is to follow ([SonarSource method](https://www.sonarsource.com/docs/CognitiveComplexity.pdf)) | 15 |
+| **Cyclomatic complexity** | Independent paths through it (McCabe): 1 + each `if`, loop, `case`, `catch`, `&&` / `\|\|` / `??`, `?:`. About the number of tests needed to cover every path. | 10 |
 | **Lines** | Length of the function | 60 |
 | **Nesting depth** | `if` / loop / `switch` / `try` inside each other | 4 |
 | **Parameters** | Number of inputs | 5 |
@@ -118,11 +124,27 @@ Tip: right-click the icon → **Move To → Secondary Side Bar** to keep it on t
 
 | Metric | What it means | Default limit (recommended) |
 | --- | --- | --- |
-| **File lines** | Length of the file | 400 |
-| **Tokens** | Estimated tokens to read the file (about 3.5 characters per token) | 8000 |
-| **Imports** | Modules the file depends on (coupling) | 15 |
-| **AI cost** | Tokens for the file **plus its direct relative imports**: what an agent realistically reads to change it | (shown, not limited) |
-| **Hotspot** | Complexity × how many commits touched the file recently (default 90 days) | (used for sorting) |
+| **Churn** (volatility) | Commits that touched the file recently (default 90 days), lines added and removed, number of authors, last change, and a weekly trend | drives FIX / PLAN / LEAVE |
+| **Coupling: Ca** (afferent) | Files in the repo that import this one: how far a mistake here spreads | (shown, not limited) |
+| **Coupling: Ce** (efferent) | Modules this file imports | 15 (`imports`) |
+| **Instability** | Ce ÷ (Ca + Ce): 0 = many depend on it (change carefully), 1 = it depends on many | (shown) |
+| **Cohesion: LCOM4** | Unrelated groups of code. In a class with 3+ methods: methods that share no fields and don't call each other. In a file at least half the line limit long: top-level functions/classes that never refer to each other or share state. 1 = cohesive. | 1 (`lcom`) |
+| **Context load** | Estimated tokens an AI agent reads to work on the file: the file **plus its relative imports** (≈3.5 characters per token) | 20000 (`contextTokens`) |
+| **File lines** / **Tokens** | Length of the file / estimated tokens of the file alone | 400 / 8000 |
+
+### Verdicts
+
+Every file gets a verdict, used for the badges, the **Payoff** sort and **What to fix**:
+
+| Verdict | When |
+| --- | --- |
+| **FIX** | Your current change made it worse, **or** it's a **hotspot**: over a limit and changed at least `verdicts.fixCommits` times (default 6) recently |
+| **PLAN** | Over a limit and changed at least `verdicts.planCommits` times (default 2): worth a ticket, not urgent |
+| **LEAVE** | Over a limit but rarely changed: complex but stable, refactoring isn't worth it now |
+| **OK** | Within the limits |
+
+**Payoff** = (commits + 1) × (context load in thousands of tokens + worst cognitive complexity) × (1 + log2(1 + Ca) ÷ 2).
+In words: how often you pay × how much each change costs × how far mistakes spread.
 
 ### How cognitive complexity is counted
 
@@ -152,50 +174,86 @@ function ship(order) {                 // complexity:
 ## 5. The sidebar
 
 ```
-Scope  [ Changed files ▾ ]            ← Changed files · Whole repo · Current file
-Sort   [ AI cost ▾ ]                  ← AI cost · Complexity · Hotspot · Name
-Repo   [ Rules… ]  [ Agent hook… ]
-
-4 file(s) · 3 problem(s) · AI context ≈21.4k tokens
-
-┌ src/finder/query.ts                         ▲ 14 → 28 ┐
-│ Complexity 28 │ Size 312 │ Coupling 9 │ AI cost ≈6.1k │   ← four bars: green → mustard → red
-│ ▸ 2 problem(s), 1 note(s)                            │
-└──────────────────────────────────────────────────────┘
-Created by Marco Torres C · GitHub · v0.1.1 · local only, no telemetry
+[ Report ]  [ Your change ]  [ What to fix ]
 ```
 
-### Controls
+### Report
 
-| Control | Options |
+```
+Scope  [ Whole repo ▾ ]      ← Changed files · Whole repo · Current file
+Sort   [ Payoff ▾ ]          ← Payoff · Context load · Complexity · Churn · Name
+Repo   [ Rules… ]  [ Agent hook… ]
+234 file(s) · 456 problem(s) · context ≈1.9M tokens
+
+┌ libs/tools/src/finder/findCompanies.ts        FIX  🔍 ┐
+│ Cognitive 41 │ Cyclomatic 28 │ Nesting 6               │
+│ Churn 14×    │ Coupling Ca 9·Ce 18 │ Cohesion LCOM 3   │
+│ Context load ≈38k tok                                  │
+│ ▸ 3 problem(s)                                         │
+└────────────────────────────────────────────────────────┘
+```
+
+- **File name:** opens the file. **🔍:** opens the deep analysis (below).
+- **Badge:** FIX / PLAN / LEAVE / OK ([verdicts](#verdicts)). Hover it for what it means.
+- **Seven bars**, each coloured **green → mustard → red** as the value approaches and passes its limit. Hover for exact values.
+  The **Churn** bar fills up towards the hotspot threshold (`verdicts.fixCommits`).
+- **▲ / ▼ before → after** *(Changed files scope)*: the hardest function compared with the last commit.
+- **▸ N problem(s):** what got worse (✖), improved (▼) or was accepted with a comment (✓). Each line links to the code.
+
+### Deep analysis of a file (🔍)
+
+| Section | Shows |
 | --- | --- |
-| **Scope** | **Changed files**: changed since the last commit, including uncommitted and untracked files. **Whole repo**: every included file, up to `complexityLens.maxFiles`. **Current file**: the file open in the editor. |
-| **Sort** | **AI cost**: most expensive to read first. **Complexity**: worst function first. **Hotspot**: complex *and* frequently changed first. **Name**. |
-| **Rules…** | Opens `complexity-lens.json`, or creates it from a preset |
-| **Agent hook…** | Installs the agent hook. Disabled in Restricted Mode. |
+| Verdict and **why it matters** | The badge, the reason, and a plain-language explanation (churn, dependents, tokens, hardest function) |
+| **Metrics** | Each metric now, at the last commit, and its limit, with a bar and ✓ / ✖ |
+| **Churn** | Commits, lines added/removed, authors, last change, and a weekly sparkline |
+| **Coupling** | **Used by**: files that import it. **Uses**: files and packages it imports. Click a file to open *its* deep analysis. |
+| **Functions** | Worst first, with cognitive, cyclomatic, lines and nesting. Click one for its own screen. |
+| **Suggested split** | When the file is big and has unrelated groups: which functions go in which new file, and the tokens saved per edit |
+| **Actions** | ✨ Fix with AI · 🎫 Ticket draft · 🧹 Chore · Accept… · Ignore |
 
-### Each file card
+Use **← Back** and the breadcrumb (`Project › file › function`) to move around.
 
-- **Path:** click to open the file.
-- **▲ / ▼ before → after** *(Changed files scope)*: the highest function complexity compared with the last commit.
-  ▲ red is worse, ▼ green is better.
-- **Four bars**, each coloured **green → mustard → red** as it approaches and passes its limit. Hover for the exact values and limits:
-  - **Complexity:** highest function complexity, and which function it is
-  - **Size:** file lines
-  - **Coupling:** imports
-  - **AI cost:** ≈ tokens for the file and its direct imports
-- **N commit(s) recently · hotspot score N** *(Whole repo scope or Hotspot sort)*.
-- **▸ N problem(s), N note(s):** click to expand. Each line links to the code:
-  - **✖** a problem: over a limit, judged by your [policy](#8-the-ratchet-adopt-it-on-day-one)
-  - **▼** an improvement: it got better
-  - **✓** accepted with a `complexity-ok` comment
+### Function screen
 
-### Summary and notices
+- **Metrics** now / last commit / limit for cognitive, cyclomatic, nesting, lines and parameters.
+- **Where the complexity is:** every place that adds to the score, with its line, how deeply it's nested, and the points it
+  adds. The biggest one is marked **◀**.
+- **Calls / called by** within the file (click to jump).
+- **How to fix:** specific suggestions, e.g. *"Move lines 61–86 (the for) into its own function: about −18 cognitive"*,
+  *"Replace the switch at line 70 with a lookup table"*, *"Group the 7 parameters into one options object"*.
+- **Actions:** ✨ Fix with AI · 🧹 Chore · Accept…
 
-- **N file(s) · N problem(s) · AI context ≈N tokens** sums up what's listed.
+### Your change
+
+- **Compared with:** the last commit, or a branch (e.g. `main`): then everything changed since your branch forked from it.
+- A headline: *⚠ N file(s) to fix before the PR* or *✓ Your change didn't make anything more complex*.
+- Each file that got worse, with what got worse, why it matters, and **Fix with AI / Accept… / Open**.
+- Improvements (▼) and a count of changed files that are fine.
+- **✨ Fix all with AI** (one prompt for everything) and **📋 Copy PR summary** (for the pull request description).
+
+### What to fix
+
+The whole repository, ranked by payoff, in three groups: **FIX** (open), **PLAN** and **LEAVE** (click to expand).
+Each item shows churn, dependents, tokens per edit and the hardest function, with **Fix with AI**, **🎫 Ticket draft**,
+**Ignore** and **Open**. At the bottom: **🎫 Ticket drafts for top 5** and **🧹 Chore list**.
+**Ignore** hides a file on your machine only; ignored files are listed at the bottom and can be shown again.
+
+### The actions
+
+| Action | Produces |
+| --- | --- |
+| **✨ Fix with AI** | A prompt for your AI agent: the file or function, the exact problem and numbers, where the complexity is, the suggested fix, and the rules (*don't change behaviour, keep tests passing, no new dependencies, end within the limits*). Copied to the clipboard. |
+| **🎫 Ticket draft** | A Markdown ticket: title, problem (with the numbers), proposed approach (including the split), acceptance criteria, and a size. **Copy to clipboard** or **Save as Markdown file…** |
+| **🧹 Chore** | A one-line chore for small cleanups. Copied to the clipboard. |
+| **Accept…** | Asks for a reason, then adds `// complexity-ok: <reason>` above the function. |
+| **Ignore** | Hides the file from *What to fix* on this machine. |
+
+### Notices
+
 - *Restricted Mode: git features … are off*: trust the folder to enable them.
 - *complexity-lens.json: …*: a configuration problem. The preset value is used instead.
-- *No changed files to check…*: edit something, or switch Scope.
+- *Only the first files were analysed*: `complexityLens.maxFiles` was reached.
 
 ---
 
@@ -248,8 +306,12 @@ suggests valid values. **Commit it** so everyone, every agent and CI use the sam
 | `fileLines` | 800 | 400 | 300 |
 | `fileTokens` | 16000 | 8000 | 6000 |
 | `imports` | 25 | 15 | 12 |
+| `cyclomaticComplexity` | 20 | 10 | 8 |
+| `lcom` | 4 | 1 | 1 |
+| `contextTokens` | 40000 | 20000 | 15000 |
 
-Set any limit to `null` to switch that check off.
+Set any limit to `null` to switch that check off. The thresholds behind the verdicts live in `verdicts`
+(`fixCommits` 6, `planCommits` 2) and work with `hotspots.historyDays` (90).
 
 ### A complete example
 
@@ -284,7 +346,8 @@ Set any limit to `null` to switch that check off.
 | `allowComment` | The `complexity-ok` escape hatch. See [section 13](#13-the-escape-hatch-complexity-ok). |
 | `hook` | `afterEdit`: `off` / `inform` / `nudge`. `onFinish`: `off` / `inform` / `block`. `maxRetries`: 0–10. |
 | `ci.mode` | `off` / `warn` / `failOnRegression` / `failOverLimit` |
-| `tokens.includeImports` | Levels of relative imports added to AI cost (0–3, default 1) |
+| `tokens.includeImports` | Levels of relative imports added to the context load (0–3, default 1) |
+| `verdicts.fixCommits` / `verdicts.planCommits` | Commits (in `hotspots.historyDays`) that make an over-limit file FIX or PLAN (default 6 / 2) |
 | `hotspots.historyDays` | How far back git history is counted (default 90) |
 | `overrides` | Different `limits`, `policy`, `hook` or `allowComment` for matching files, applied in order |
 
@@ -316,17 +379,18 @@ The result is that code can only get simpler over time, and nobody is asked to f
 
 ## 9. Tutorial A: find what to fix first
 
-**Goal:** a short, evidence-based list of refactoring targets.
+**Goal:** a short, evidence-based list of refactoring targets, turned into tickets.
 
-1. **Scope: Whole repo**, **Sort: Hotspot**. The top files are both **complex** and **changed often**, so
-   simplifying them pays off on every future change.
-2. For each top file, compare the four bars:
-   - **Complexity** red: split the worst function (hover the bar to see its name).
-   - **Size** or **AI cost** red: split the file by responsibility, so an agent only needs to read the part it changes.
-   - **Coupling** red: the file depends on too much. Look for a missing abstraction.
-3. Expand **▸ problems** and jump to each one. The inline score above the function shows which limit it breaks.
-4. Switch **Sort: AI cost** to find the files that are most expensive to load into an AI's context.
-5. For a written report of everything over the limits, including untouched code:
+1. Open **What to fix**. The **FIX** group lists hotspots, ranked by payoff: complex, changed often, with dependents.
+2. Click **🔍** on the first one. Read **why it matters**, then look at:
+   - **Functions:** click the worst one. **Where the complexity is** shows the exact lines; **How to fix** says what to extract.
+   - **Suggested split:** if the file does unrelated jobs, which functions go where and how many tokens that saves per edit.
+   - **Coupling → Used by:** how many files a change here affects.
+3. Press **🎫 Ticket draft** → **Save as Markdown file…** (or copy it) and file it in your tracker. Or press **✨ Fix with AI**
+   and paste the prompt into your agent.
+4. Back on **What to fix**, use **🎫 Ticket drafts for top 5** for a batch, or **🧹 Chore list** for a quick list.
+5. Leave the **LEAVE** group alone: those files are complex but stable. Use **Ignore** for anything you've decided not to touch.
+6. For a written report of everything over the limits, including untouched code:
 
    ```sh
    node ~/.complexity-lens/cli.js check --all --policy absolute --mode warn
@@ -379,7 +443,7 @@ Simplify before continuing, or add "// complexity-ok: <reason>" above a function
 
 ### What happens when the agent tries to finish (`hook.onFinish`)
 
-Every file **changed since the last commit** is checked:
+Every file **this agent session edited** is checked (the after-edit hook remembers them):
 
 | `onFinish` | Behaviour |
 | --- | --- |
@@ -389,11 +453,10 @@ Every file **changed since the last commit** is checked:
 
 ### Good to know
 
-- The finish check looks at **every uncommitted change in the repository**, including yours and other tools'. If it
-  flags code the agent didn't write, commit or stash that work first, or use an `overrides` entry with
-  `"hook": { "onFinish": "inform" }` for those paths.
+- The finish check only looks at files **this session** edited, so other agents or your own uncommitted work in the same
+  checkout never block it.
 - If the hook itself fails for any reason (broken config, unexpected input), it **stays silent** and never blocks the agent.
-- The retry counter is kept per session under `.git/complexity-lens/` and resets once the problems are gone.
+- The session's file list and retry counter are kept under `.git/complexity-lens/`; the counter resets once the problems are gone.
 
 ### Remove it
 
@@ -419,7 +482,7 @@ jobs:
   complexity:
     runs-on: ubuntu-latest
     env:
-      CL_VERSION: v0.1.1
+      CL_VERSION: v0.2.0
     steps:
       - uses: actions/checkout@v4
         with:
@@ -547,7 +610,7 @@ node ~/.complexity-lens/cli.js init --preset strict                    # new pro
 | Setting | Values | Default |
 | --- | --- | --- |
 | `complexityLens.scope` | `changed`, `repo`, `current` | `changed` |
-| `complexityLens.sort` | `aiCost`, `complexity`, `hotspot`, `name` | `aiCost` |
+| `complexityLens.sort` | `payoff`, `aiCost` (context load), `complexity`, `churn`, `name` | `payoff` |
 | `complexityLens.inlineScores` | `true` / `false` | `true` |
 | `complexityLens.statusBar` | `true` / `false` | `true` |
 | `complexityLens.maxFiles` | 100–20000 | `3000` |
@@ -577,10 +640,11 @@ Details: [SECURITY.md](../SECURITY.md) and [SECURITY_ASSESSMENT.md](SECURITY_ASS
 | *complexity-lens.json: …* notice | Fix the reported option. Until then the preset value is used, and `check` exits with code 2. |
 | The hook does nothing | Start a **new** agent session. Check that `node --version` works in a terminal, that `~/.complexity-lens/cli.js` exists, and that the file is included by your rules. |
 | The agent keeps being sent back | Lower `hook.maxRetries`, set `onFinish` to `inform`, or accept the function with `// complexity-ok: <reason>`. |
-| The finish check flags code the agent didn't write | It checks every uncommitted change in the repository. Commit or stash other work first. |
 | A renamed function is suddenly a problem | Renames count as new under the ratchet. Bring it under the limit, or accept it with `complexity-ok`. |
-| Numbers look different from another tool | Cognitive complexity is not cyclomatic complexity. See [section 4](#4-what-is-measured). Tokens are an estimate (about 3.5 characters per token). |
-| Whole repo is slow or incomplete | Narrow `include`, or lower or raise `complexityLens.maxFiles`. A *Showing the first files only* note means the cap was hit. |
+| Numbers look different from another tool | Cognitive and cyclomatic complexity measure different things; both are shown. See [section 4](#4-what-is-measured). Tokens are an estimate (about 3.5 characters per token). |
+| Whole repo is slow or incomplete | Narrow `include`, or lower or raise `complexityLens.maxFiles`. An *Only the first files were analysed* note means the cap was hit. |
+| A small utility file shows no cohesion score | Module cohesion is only judged once a file is at least half the `fileLines` limit, and class cohesion from 3 methods. |
+| A file is FIX but its functions look fine | It may be a hotspot for its size, context load or cohesion. Open 🔍 to see which metric is over. |
 
 ---
 
@@ -593,7 +657,7 @@ Details: [SECURITY.md](../SECURITY.md) and [SECURITY_ASSESSMENT.md](SECURITY_ASS
 
 **Will teammates without the extension get errors from a committed hook?** No. The entries are guarded and do nothing if the checker isn't installed.
 
-**Is the AI cost exact?** No. It's an estimate (about 3.5 characters per token) of the file plus its direct relative imports.
+**Is the context load exact?** No. It's an estimate (about 3.5 characters per token) of the file plus its relative imports.
 Use it to compare files, not as a bill.
 
 **Why ratchet by default?** So you can adopt it in any codebase on day one without noise about code nobody touched.
@@ -612,5 +676,5 @@ zoomable diagram, shows an AI plan on that diagram before any code is written, a
 2. **While coding:** Complexity Lens's agent hook keeps each edit under the limits.
 3. **Before merging:** Change Map's Compare mode shows complexity before → after per function, and Complexity Lens's CI check guards the pull request.
 
-Change Map's `cx` is *cyclomatic* complexity (number of paths). Complexity Lens uses *cognitive* complexity (how hard the code is to follow).
-The scores differ, but they usually agree on which functions are the worst.
+Change Map's `cx` is *cyclomatic* complexity (number of paths), which Complexity Lens also shows next to *cognitive* complexity
+(how hard the code is to follow). The two usually agree on which functions are the worst.

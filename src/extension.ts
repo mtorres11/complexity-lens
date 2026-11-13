@@ -8,13 +8,10 @@ import * as git from "./core/git";
 import { CONFIG_FILE, Project } from "./core/project";
 import { configTemplate } from "./core/template";
 import { installHook, refreshShim } from "./vscode/hookInstaller";
-import {
-  ComplexityCodeLens,
-  explain,
-  LANGUAGES,
-  StatusBar,
-} from "./vscode/lens";
-import { aboutFrom, Sidebar } from "./vscode/sidebar";
+import { ComplexityCodeLens, explain, LANGUAGES } from "./vscode/lens";
+import { aboutFrom } from "./vscode/about";
+import { Sidebar } from "./vscode/sidebar";
+import { StatusBar } from "./vscode/statusBar";
 
 class Workspace {
   private projects = new Map<string, Project>();
@@ -66,7 +63,7 @@ function createUi(context: vscode.ExtensionContext, ws: Workspace): Ui {
     };
   };
   return {
-    sidebar: new Sidebar(context.extensionUri, current, aboutFrom(context.extension.packageJSON)),
+    sidebar: new Sidebar(context, current, aboutFrom(context.extension.packageJSON)),
     lens: new ComplexityCodeLens((u) => ws.projectFor(u)),
     status: new StatusBar((u) => ws.projectFor(u)),
   };
@@ -115,7 +112,7 @@ export function activate(context: vscode.ExtensionContext): void {
     if (reload) ws.reset();
     ui.lens.refresh();
     ui.status.update(vscode.window.activeTextEditor);
-    ui.sidebar.refreshSoon();
+    ui.sidebar.refreshSoon(400, reload);
   };
   // Keep ~/.complexity-lens/cli.js current if the hook was installed before (never creates it).
   try {

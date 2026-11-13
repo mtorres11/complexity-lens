@@ -15,7 +15,11 @@ Created by **Marco Torres C** · <https://github.com/mtorres11/complexity-lens>
 
 | Piece | What it does |
 |---|---|
-| **Sidebar** | Every changed file (or the whole repo) with four bars: **Complexity**, **Size**, **Coupling** and **AI cost**, coloured green → mustard → red as they approach and pass your limits. Click any problem to jump to it. |
+| **Report** | Every changed file (or the whole repo) with a **FIX / PLAN / LEAVE / OK** verdict and seven bars (cognitive, cyclomatic, nesting, churn, coupling, cohesion, context load), coloured green → mustard → red. Click a file to open it, or 🔍 for its deep analysis. |
+| **Deep analysis** | Per file: why it matters, every metric against its limit, churn trend, who depends on it, functions, a suggested split. Per function: where the complexity is (line by line) and how to fix it. |
+| **Your change** | Did my change make anything more complex? With *Fix all with AI* and *Copy PR summary*. |
+| **What to fix** | The whole repo ranked by payoff: complex × changed often × depended on. FIX / PLAN / LEAVE. |
+| **Actions** | ✨ Fix with AI (a ready prompt), 🎫 Ticket draft (copy or save as Markdown), 🧹 Chore, Accept (adds a `complexity-ok` comment), Ignore. |
 | **Inline scores** | A small line above each function: `complexity 18 ⚠ · 62 lines · nesting 3`. |
 | **Status bar** | The current file at a glance: highest complexity and estimated tokens. |
 | **Agent hook** | For AI coding agents with command hooks. After each edit, the agent is told about new problems and fixes them in the same turn. Before it finishes, it can be asked to clean up what's left. |
@@ -26,10 +30,13 @@ Created by **Marco Torres C** · <https://github.com/mtorres11/complexity-lens>
 | Metric | Meaning |
 |---|---|
 | Cognitive complexity | How hard a function is to follow: branches, loops, `catch`, ternaries, mixed `&&`/`||`, plus extra for nesting ([SonarSource method](https://www.sonarsource.com/docs/CognitiveComplexity.pdf)). |
+| Cyclomatic complexity | Independent paths through a function (McCabe): about the number of tests to cover it. |
 | Lines, nesting depth, parameters | Size and shape of each function. |
-| File lines, imports | Size and coupling of each file. |
-| AI cost | Estimated tokens to read a file plus its direct imports (about 3.5 characters per token: an estimate, not exact). |
-| Hotspots | Complexity × how often the file changed recently in git. Tells you what to fix first. |
+| Churn | Commits, lines changed and authors per file from recent git history, with a weekly trend. |
+| Coupling | Afferent (Ca: files that import it), efferent (Ce: what it imports) and instability. |
+| Cohesion (LCOM4) | Unrelated groups of code in a class or file; also drives the suggested split. |
+| Context load | Estimated tokens an AI agent reads to work on a file: the file plus its imports (≈3.5 characters per token, an estimate). |
+| File lines | Size of each file. |
 
 ## Install
 
@@ -94,7 +101,7 @@ node complexity-lens-cli.js check --base origin/main --format github
 | Setting | Default | What it does |
 |---|---|---|
 | `complexityLens.scope` | `changed` | What the sidebar lists: changed files, whole repo, or current file. |
-| `complexityLens.sort` | `aiCost` | Sort by AI cost, complexity, hotspot or name. |
+| `complexityLens.sort` | `payoff` | Sort by payoff, context load, complexity, churn or name. |
 | `complexityLens.inlineScores` | `true` | Scores above each function. |
 | `complexityLens.statusBar` | `true` | Current-file summary in the status bar. |
 | `complexityLens.maxFiles` | `3000` | Cap for the whole-repo view. |

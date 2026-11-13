@@ -61,7 +61,10 @@ Default `include`: every TypeScript/JavaScript file in the repo. Default `exclud
 | `parameters` | Inputs a function takes | Many parameters usually means it does too much | 7 | 5 | 4 |
 | `fileLines` | Length of a file | Big files cost tokens every time an AI opens them | 800 | 400 | 300 |
 | `fileTokens` | Estimated tokens to read the file | The direct "AI reading cost" | 16000 | 8000 | 6000 |
-| `imports` | Modules this file depends on | Each import is more code an AI may need to read | 25 | 15 | 12 |
+| `imports` | Modules this file depends on (efferent coupling) | Each import is more code an AI may need to read | 25 | 15 | 12 |
+| `cyclomaticComplexity` | Independent paths through a function | More paths, more cases to get right and test | 20 | 10 | 8 |
+| `lcom` | Unrelated groups in a class (3+ methods) or in a file at least half the `fileLines` limit | The file does several jobs; an agent loads all of them | 4 | 1 | 1 |
+| `contextTokens` | Tokens to read the file plus its imports | What an agent really reads to change it | 40000 | 20000 | 15000 |
 
 Set a limit to `null` to turn that check off.
 
@@ -126,6 +129,17 @@ Notes:
 How many levels of relative imports to add when estimating **AI cost** (`0` = the file alone, max `3`). Default `1`.
 Only relative imports (`./x`, `../y`) inside the repo are followed; packages are not counted.
 
+## `verdicts`: FIX / PLAN / LEAVE
+
+Files over a limit are classified for the badges and *What to fix*:
+
+| Option | Default | Meaning |
+|---|---|---|
+| `fixCommits` | `6` | Changed at least this many times in `hotspots.historyDays` → **FIX** (hotspot) |
+| `planCommits` | `2` | Changed at least this many times → **PLAN**; fewer → **LEAVE** (complex but stable) |
+
+A file the current change made worse is always **FIX**.
+
 ## `hotspots.historyDays`
 
 How far back in git to count changes per file for **hotspots**. Default `90`.
@@ -151,7 +165,7 @@ These affect only how the sidebar looks for you. They're user-level only, so a r
 | Setting | Values | Default |
 |---|---|---|
 | `complexityLens.scope` | `changed`, `repo`, `current` | `changed` |
-| `complexityLens.sort` | `aiCost`, `complexity`, `hotspot`, `name` | `aiCost` |
+| `complexityLens.sort` | `payoff`, `aiCost`, `complexity`, `churn`, `name` | `payoff` |
 | `complexityLens.inlineScores` | `true` / `false` | `true` |
 | `complexityLens.statusBar` | `true` / `false` | `true` |
 | `complexityLens.maxFiles` | 100–20000 | `3000` |

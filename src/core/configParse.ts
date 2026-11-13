@@ -67,30 +67,25 @@ class Validator {
     return undefined;
   }
 
+  /** Problem with one file pattern, or undefined if it's acceptable. */
+  private globProblem(g: unknown): string | undefined {
+    if (typeof g !== "string" || !g.trim() || g.length > MAX_GLOB_LENGTH) return `each pattern must be a non-empty string (max ${MAX_GLOB_LENGTH} characters)`;
+    if (g.startsWith("/") || g.split("/").includes("..")) return `"${g}" must be relative to the repo root and cannot use ".."`;
+    return undefined;
+  }
+
   globs(v: unknown, path: string): string[] | undefined {
     if (v === undefined) return undefined;
     const list = typeof v === "string" ? [v] : v;
     if (!Array.isArray(list) || list.length > MAX_GLOBS) {
-      this.errors.push(
-        `${path}: must be a list of up to ${MAX_GLOBS} file patterns`,
-      );
+      this.errors.push(`${path}: must be a list of up to ${MAX_GLOBS} file patterns`);
       return undefined;
     }
     const out: string[] = [];
     for (const g of list) {
-      if (typeof g !== "string" || !g.trim() || g.length > MAX_GLOB_LENGTH) {
-        this.errors.push(
-          `${path}: each pattern must be a non-empty string (max ${MAX_GLOB_LENGTH} characters)`,
-        );
-        continue;
-      }
-      if (g.startsWith("/") || g.split("/").includes("..")) {
-        this.errors.push(
-          `${path}: "${g}" must be relative to the repo root and cannot use ".."`,
-        );
-        continue;
-      }
-      out.push(g);
+      const problem = this.globProblem(g);
+      if (problem) this.errors.push(`${path}: ${problem}`);
+      else out.push(g as string);
     }
     return out;
   }
@@ -158,7 +153,7 @@ function strip<T extends object>(o: T): Partial<T> {
 }
 
 /** Validates raw JSON and merges it over its preset. Invalid values fall back to the preset. */
-const TOP_KEYS = ["preset", "include", "exclude", "limits", "policy", "allowComment", "hook", "ci", "tokens", "hotspots", "overrides"];
+const TOP_KEYS = ["preset", "include", "exclude", "limits", "policy", "allowComment", "hook", "ci", "tokens", "hotspots", "verdicts", "overrides"];
 
 /** Runs `apply` on an optional nested object, reporting a wrong type or unknown keys. */
 function section(v: Validator, value: unknown, path: string, keys: readonly string[], apply: (o: Obj) => void): void {
@@ -183,6 +178,10 @@ function applySmallSections(v: Validator, raw: Obj, cfg: Config): void {
   });
   section(v, raw.tokens, "tokens", ["includeImports"], (o) => {
     cfg.tokens.includeImports = v.int(o.includeImports, "tokens.includeImports", 0, 3) ?? cfg.tokens.includeImports;
+  });
+  section(v, raw.verdicts, "verdicts", ["fixCommits", "planCommits"], (o) => {
+    cfg.verdicts.fixCommits = v.int(o.fixCommits, "verdicts.fixCommits", 1, 10000) ?? cfg.verdicts.fixCommits;
+    cfg.verdicts.planCommits = v.int(o.planCommits, "verdicts.planCommits", 1, 10000) ?? cfg.verdicts.planCommits;
   });
   section(v, raw.hotspots, "hotspots", ["historyDays"], (o) => {
     cfg.hotspots.historyDays = v.int(o.historyDays, "hotspots.historyDays", 1, 3650) ?? cfg.hotspots.historyDays;
@@ -226,30 +225,3 @@ export function resolveConfig(raw: unknown): LoadResult {
   applyOverrides(v, raw, cfg);
   return { config: cfg, errors: v.errors, warnings: v.warnings };
 }
-
-/** Strips // and /* *\/ comments and trailing commas so the config file can be JSONC. */
-// complexity-ok: character-level scanner; splitting it would hide the string/comment state
-export function parseJsonc(text: string): unknown {
-  let out = "";
-  let inString = false;
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i];
-    if (inString) {
-      out += c;
-      if (c === "\\") out += text[++i] ?? "";
-      else if (c === '"') inString = false;
-    } else if (c === '"') {
-      inString = true;
-      out += c;
-    } else if (c === "/" && text[i + 1] === "/") {
-      while (i < text.length && text[i] !== "\n") i++;
-      out += "\n";
-    } else if (c === "/" && text[i + 1] === "*") {
-      i += 2;
-      while (i < text.length && !(text[i] === "*" && text[i + 1] === "/")) i++;
-      i++;
-    } else out += c;
-  }
-  return JSON.parse(out.replace(/,(\s*[}\]])/g, "$1"));
-}
-

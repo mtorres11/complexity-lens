@@ -9,9 +9,12 @@ import {
   LoadResult,
   settingsFor,
 } from "./config";
-import { parseJsonc, resolveConfig } from "./configParse";
+import { resolveConfig } from "./configParse";
+import { parseJsonc } from "./jsonc";
 import { evaluateFile, Finding } from "./evaluate";
 import * as git from "./git";
+import { Churn, parseChurn } from "./churn";
+import { buildDependents, DependentsIndex } from "./dependents";
 import { normalizePath } from "./glob";
 
 export const CONFIG_FILE = "complexity-lens.json";
@@ -35,6 +38,18 @@ export interface ProjectOptions {
 
 export class Project {
   readonly loaded: LoadResult;
+  private readonly refCache = new Map<string, { at: number; ok: boolean }>();
+
+  /** Whether a ref resolves, remembered for a few seconds. */
+  private refExists(ref: string): boolean {
+    const hit = this.refCache.get(ref);
+    if (hit && Date.now() - hit.at < 5_000) return hit.ok;
+    const ok = git.hasCommit(this.root, ref);
+    this.refCache.set(ref, { at: Date.now(), ok });
+    return ok;
+  }
+
+  private churnCache?: { at: number; map: Map<string, Churn> };
   private readonly cache = new Map<
     string,
     { mtimeMs: number; metrics: FileMetrics }
@@ -103,8 +118,7 @@ export class Project {
 
   /** Metrics of the file at a git ref, or undefined if it did not exist (or git is off). */
   baselineMetrics(relPath: string, ref = "HEAD"): FileMetrics | undefined {
-    if (!this.options.useGit || !git.hasCommit(this.root, ref))
-      return undefined;
+    if (!this.options.useGit || !this.refExists(ref)) return undefined;
     const text = git.fileAt(this.root, ref, relPath);
     if (text === undefined || text.length > MAX_SOURCE_BYTES) return undefined;
     return analyzeSource(
@@ -122,6 +136,9 @@ export class Project {
     const metrics = this.metrics(relPath, text);
     if (!metrics) return { findings: [] };
     const base = this.baselineMetrics(relPath, baseRef);
+    // Context load: the file plus its imports. The baseline reuses today's imports.
+    metrics.contextTokens = this.aiCost(relPath, undefined, metrics);
+    if (base) base.contextTokens = base.fileTokens + (metrics.contextTokens - metrics.fileTokens);
     return {
       metrics,
       findings: evaluateFile(metrics, base, settingsFor(this.config, relPath)),
@@ -145,26 +162,37 @@ export class Project {
       .slice(0, max);
   }
 
-  /** Estimated tokens to read a file plus its relative imports, `depth` levels deep. */
-  aiCost(relPath: string, depth = this.config.tokens.includeImports): number {
-    const seen = new Set<string>();
-    const visit = (rel: string, level: number): number => {
-      if (seen.has(rel)) return 0;
-      seen.add(rel);
-      const m = this.metrics(rel);
-      if (!m) return 0;
-      let total = m.fileTokens;
-      if (level < depth)
-        for (const spec of m.relativeImports) {
-          const target = this.resolveImport(rel, spec);
-          if (target) total += visit(target, level + 1);
-        }
-      return total;
-    };
-    return visit(relPath, 0);
+  /**
+   * Estimated tokens to read a file plus its relative imports, `depth` levels deep.
+   * `rootMetrics` lets the editor pass metrics for unsaved text of the root file.
+   */
+  aiCost(relPath: string, depth = this.config.tokens.includeImports, rootMetrics?: FileMetrics): number {
+    return this.contextBreakdown(relPath, depth, rootMetrics).total;
   }
 
-  private resolveImport(fromRel: string, spec: string): string | undefined {
+  /** Context load split into the file itself and the files it imports (with their sizes). */
+  contextBreakdown(relPath: string, depth = this.config.tokens.includeImports, rootMetrics?: FileMetrics) {
+    const seen = new Set<string>();
+    const imports: { path: string; tokens: number }[] = [];
+    const visit = (rel: string, level: number): void => {
+      if (seen.has(rel)) return;
+      seen.add(rel);
+      const m = rel === relPath && rootMetrics ? rootMetrics : this.metrics(rel);
+      if (!m) return;
+      if (level > 0) imports.push({ path: rel, tokens: m.fileTokens });
+      if (level >= depth) return;
+      for (const spec of m.relativeImports) {
+        const target = this.resolveImport(rel, spec);
+        if (target) visit(target, level + 1);
+      }
+    };
+    visit(relPath, 0);
+    const own = (rootMetrics ?? this.metrics(relPath))?.fileTokens ?? 0;
+    const fromImports = imports.reduce((n, i) => n + i.tokens, 0);
+    return { own, fromImports, total: own + fromImports, imports: imports.sort((a, b) => b.tokens - a.tokens) };
+  }
+
+  resolveImport(fromRel: string, spec: string): string | undefined {
     const base = normalizePath(
       path.posix.join(path.posix.dirname(fromRel), spec),
     );
@@ -188,6 +216,25 @@ export class Project {
         return c;
     }
     return undefined;
+  }
+
+  /** Churn per file over hotspots.historyDays (cached for a minute). */
+  churn(): Map<string, Churn> {
+    if (!this.options.useGit) return new Map();
+    if (this.churnCache && Date.now() - this.churnCache.at < 60_000) return this.churnCache.map;
+    let map = new Map<string, Churn>();
+    try {
+      map = parseChurn(git.logNumstat(this.root, this.config.hotspots.historyDays), this.config.hotspots.historyDays);
+    } catch {
+      /* no history available */
+    }
+    this.churnCache = { at: Date.now(), map };
+    return map;
+  }
+
+  /** Reverse import index over the given files (uses cached metrics). */
+  dependents(files: readonly string[]): DependentsIndex {
+    return buildDependents(files, (rel) => this.metrics(rel)?.relativeImports, (from, spec) => this.resolveImport(from, spec));
   }
 
   hotspotCounts(): Map<string, number> {

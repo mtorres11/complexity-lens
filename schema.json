@@ -7,11 +7,18 @@
   "definitions": {
     "globs": {
       "type": "array",
-      "items": { "type": "string", "minLength": 1, "maxLength": 300 },
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 300
+      },
       "maxItems": 200
     },
     "limit": {
-      "type": ["integer", "null"],
+      "type": [
+        "integer",
+        "null"
+      ],
       "minimum": 1,
       "markdownDescription": "Set to `null` to turn this check off."
     },
@@ -23,6 +30,10 @@
         "cognitiveComplexity": {
           "$ref": "#/definitions/limit",
           "markdownDescription": "**How hard a function is to follow.** Adds 1 for each `if`, `else`, loop, `catch`, ternary, `switch`, labelled jump and each mixed `&&`/`||`/`??` chain, plus extra for every level of nesting. High scores are where AI edits introduce bugs.\n\nPresets: relaxed 25 · recommended 15 · strict 10."
+        },
+        "cyclomaticComplexity": {
+          "$ref": "#/definitions/limit",
+          "markdownDescription": "**Independent paths through a function** (McCabe): 1 + each `if`, loop, `case`, `catch`, `&&`/`||`/`??` and `?:`. Roughly the number of tests needed to cover every path.\n\nPresets: relaxed 20 · recommended 10 · strict 8."
         },
         "functionLines": {
           "$ref": "#/definitions/limit",
@@ -46,13 +57,24 @@
         },
         "imports": {
           "$ref": "#/definitions/limit",
-          "markdownDescription": "**How many other modules this file depends on.** Each import is more code an AI may need to read.\n\nPresets: relaxed 25 · recommended 15 · strict 12."
+          "markdownDescription": "**Efferent coupling (Ce): modules this file imports.** Each import is more code an AI may need to read. Afferent coupling (Ca, files that import this one) is shown in the sidebar but has no limit: it measures how far mistakes spread.\n\nPresets: relaxed 25 · recommended 15 · strict 12."
+        },
+        "lcom": {
+          "$ref": "#/definitions/limit",
+          "markdownDescription": "**Cohesion (LCOM4): unrelated groups of code.** In a class (3+ methods): methods that share no fields and don't call each other. In a file at least half the `fileLines` limit long: top-level functions/classes that never refer to each other or share module state. 1 = cohesive; 3 = three unrelated jobs. These groups drive the **suggested split**.\n\nPresets: relaxed 4 · recommended 1 · strict 1."
+        },
+        "contextTokens": {
+          "$ref": "#/definitions/limit",
+          "markdownDescription": "**Context load: estimated tokens an AI agent reads to work on the file**: the file plus the files it imports (`tokens.includeImports` levels deep). An estimate (≈3.5 characters per token), not exact.\n\nPresets: relaxed 40000 · recommended 20000 · strict 15000."
         }
       }
     },
     "policy": {
       "type": "string",
-      "enum": ["ratchet", "absolute"],
+      "enum": [
+        "ratchet",
+        "absolute"
+      ],
       "markdownEnumDescriptions": [
         "**Don't make it worse.** New functions must be under the limits; existing ones may stay over them but an edit can't push them higher. Untouched code is never flagged.",
         "**Everything must be under the limits.** Anything over a limit in the checked files is flagged, even if it wasn't changed. Best for new projects."
@@ -65,7 +87,11 @@
       "properties": {
         "afterEdit": {
           "type": "string",
-          "enum": ["off", "inform", "nudge"],
+          "enum": [
+            "off",
+            "inform",
+            "nudge"
+          ],
           "markdownDescription": "What happens **after each file edit**.",
           "markdownEnumDescriptions": [
             "No check after edits.",
@@ -75,7 +101,11 @@
         },
         "onFinish": {
           "type": "string",
-          "enum": ["off", "inform", "block"],
+          "enum": [
+            "off",
+            "inform",
+            "block"
+          ],
           "markdownDescription": "What happens **when the agent tries to end its turn**. Checks every file changed since the last commit.",
           "markdownEnumDescriptions": [
             "No check at the end.",
@@ -109,10 +139,16 @@
     }
   },
   "properties": {
-    "$schema": { "type": "string" },
+    "$schema": {
+      "type": "string"
+    },
     "preset": {
       "type": "string",
-      "enum": ["relaxed", "recommended", "strict"],
+      "enum": [
+        "relaxed",
+        "recommended",
+        "strict"
+      ],
       "default": "recommended",
       "markdownDescription": "**Starting point.** Anything you set explicitly overrides it.",
       "markdownEnumDescriptions": [
@@ -129,10 +165,19 @@
       "$ref": "#/definitions/globs",
       "markdownDescription": "**Files to skip**: tests, generated code, build output. Same pattern syntax as `include`."
     },
-    "limits": { "$ref": "#/definitions/limits" },
-    "policy": { "$ref": "#/definitions/policy", "markdownDescription": "**What gets judged.**" },
-    "allowComment": { "$ref": "#/definitions/allowComment" },
-    "hook": { "$ref": "#/definitions/hook" },
+    "limits": {
+      "$ref": "#/definitions/limits"
+    },
+    "policy": {
+      "$ref": "#/definitions/policy",
+      "markdownDescription": "**What gets judged.**"
+    },
+    "allowComment": {
+      "$ref": "#/definitions/allowComment"
+    },
+    "hook": {
+      "$ref": "#/definitions/hook"
+    },
     "ci": {
       "type": "object",
       "additionalProperties": false,
@@ -140,7 +185,12 @@
       "properties": {
         "mode": {
           "type": "string",
-          "enum": ["off", "warn", "failOnRegression", "failOverLimit"],
+          "enum": [
+            "off",
+            "warn",
+            "failOnRegression",
+            "failOverLimit"
+          ],
           "markdownEnumDescriptions": [
             "No check.",
             "Annotations on changed lines that got worse; the check still passes.",
@@ -174,6 +224,25 @@
         }
       }
     },
+    "verdicts": {
+      "type": "object",
+      "additionalProperties": false,
+      "markdownDescription": "**How files over a limit are classified** in *What to fix*: **FIX** (hotspot) if changed at least `fixCommits` times in `hotspots.historyDays`, **PLAN** if at least `planCommits` times, otherwise **LEAVE** (complex but stable, not worth it now). A file the current change made worse is always FIX.",
+      "properties": {
+        "fixCommits": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000,
+          "markdownDescription": "Commits that make an over-limit file a hotspot (FIX). Default `6`."
+        },
+        "planCommits": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000,
+          "markdownDescription": "Commits that make an over-limit file worth planning (PLAN). Default `2`."
+        }
+      }
+    },
     "overrides": {
       "type": "array",
       "maxItems": 100,
@@ -181,13 +250,26 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["files"],
+        "required": [
+          "files"
+        ],
         "properties": {
-          "files": { "$ref": "#/definitions/globs", "markdownDescription": "Which files this override applies to." },
-          "limits": { "$ref": "#/definitions/limits" },
-          "policy": { "$ref": "#/definitions/policy" },
-          "hook": { "$ref": "#/definitions/hook" },
-          "allowComment": { "$ref": "#/definitions/allowComment" }
+          "files": {
+            "$ref": "#/definitions/globs",
+            "markdownDescription": "Which files this override applies to."
+          },
+          "limits": {
+            "$ref": "#/definitions/limits"
+          },
+          "policy": {
+            "$ref": "#/definitions/policy"
+          },
+          "hook": {
+            "$ref": "#/definitions/hook"
+          },
+          "allowComment": {
+            "$ref": "#/definitions/allowComment"
+          }
         }
       }
     }

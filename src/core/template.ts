@@ -14,17 +14,20 @@ export function configTemplate(preset: PresetName = "recommended"): string {
 
   // Files to measure, and files to skip (tests, generated code, build output).
   "include": ["**/*.{ts,tsx,js,jsx,mts,cts,mjs,cjs}"],
-  "exclude": ["**/*.test.*", "**/*.spec.*", "**/__tests__/**", "**/generated/**", "**/*.d.ts", "dist/**", "build/**", "out/**", "coverage/**", "**/node_modules/**", "**/vendor/**", "**/*.min.js"],
+  "exclude": ["**/*.test.*", "**/*.spec.*", "**/__tests__/**", "**/generated/**", "**/_generated/**", "**/*.generated.*", "**/*.d.ts", "dist/**", "build/**", "out/**", "coverage/**", "**/node_modules/**", "**/vendor/**", "**/*.min.js"],
 
   // When something counts as "too much". Set a limit to null to turn that check off.
   "limits": {
     "cognitiveComplexity": ${l.cognitiveComplexity}, // how hard a function is to follow
+    "cyclomaticComplexity": ${l.cyclomaticComplexity}, // independent paths through a function
     "functionLines": ${l.functionLines},       // length of one function
     "nestingDepth": ${l.nestingDepth},         // if/for/try inside each other
     "parameters": ${l.parameters},            // inputs a function takes
     "fileLines": ${l.fileLines},           // length of a file
     "fileTokens": ${l.fileTokens},         // estimated tokens an AI reads to open the file
-    "imports": ${l.imports}               // files this file depends on
+    "imports": ${l.imports},              // efferent coupling: modules this file imports
+    "lcom": ${l.lcom},                   // cohesion: unrelated groups in a class or (big) file
+    "contextTokens": ${l.contextTokens}       // context load: tokens to read the file plus its imports
   },
 
   // "ratchet": don't make it worse (new code must be under the limits, old code may not grow).
@@ -48,6 +51,10 @@ export function configTemplate(preset: PresetName = "recommended"): string {
 
   // Hotspots look at how often files changed in git over this many days.
   "hotspots": { "historyDays": 90 },
+
+  // Verdicts for files over a limit: FIX if changed at least fixCommits times in historyDays,
+  // PLAN if at least planCommits times, otherwise LEAVE (complex but stable).
+  "verdicts": { "fixCommits": 6, "planCommits": 2 },
 
   // Different rules for parts of the repo, applied in order. Example:
   // { "files": ["src/legacy/**"], "hook": { "onFinish": "inform" } }

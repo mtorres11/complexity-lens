@@ -2,7 +2,7 @@
   "name": "complexity-lens",
   "displayName": "Complexity Lens",
   "description": "See code complexity and AI reading cost per file and function, and keep AI-generated code simple with an agent hook and a CI check.",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "publisher": "mtorres11",
   "license": "MIT",
   "author": {
@@ -137,18 +137,20 @@
         "complexityLens.sort": {
           "type": "string",
           "enum": [
+            "payoff",
             "aiCost",
             "complexity",
-            "hotspot",
+            "churn",
             "name"
           ],
           "enumDescriptions": [
-            "Estimated tokens an AI agent reads to work on the file (file plus its imports).",
+            "Biggest payoff first: how often it changes × how costly it is to work on × how many files depend on it.",
+            "Context load: estimated tokens an AI agent reads to work on the file (file plus its imports).",
             "Highest function complexity in the file.",
-            "Complexity × how often the file changed recently (needs git).",
+            "Most changed recently (needs git).",
             "File path, alphabetically."
           ],
-          "default": "aiCost",
+          "default": "payoff",
           "scope": "application",
           "description": "How the sidebar is sorted."
         },

@@ -33,11 +33,31 @@ export interface Finding {
 
 const FUNCTION_METRICS = [
   "cognitiveComplexity",
+  "cyclomaticComplexity",
   "functionLines",
   "nestingDepth",
   "parameters",
 ] as const;
-const FILE_METRICS = ["fileLines", "fileTokens", "imports"] as const;
+const FILE_METRICS = ["fileLines", "fileTokens", "imports", "lcom", "contextTokens"] as const;
+type FileMetric = (typeof FILE_METRICS)[number];
+
+/**
+ * LCOM that counts against the limit: classes always; the module only once the file is at
+ * least half the line limit, so small utility files with a few unrelated helpers are fine.
+ */
+export function judgedLcom(m: FileMetrics, s: FileSettings): number {
+  const classes = Math.max(0, ...m.cohesion.filter((c) => c.scope === "class").map((c) => c.lcom));
+  const big = s.limits.fileLines === null || m.fileLines * 2 >= s.limits.fileLines;
+  const mod = big ? Math.max(0, ...m.cohesion.filter((c) => c.scope === "module").map((c) => c.lcom)) : 0;
+  return Math.max(classes, mod);
+}
+
+/** Value of a file-level metric, or undefined when it can't be measured. */
+export function fileValue(m: FileMetrics, metric: FileMetric, s: FileSettings): number | undefined {
+  if (metric === "lcom") return judgedLcom(m, s);
+  if (metric === "contextTokens") return m.contextTokens;
+  return m[metric];
+}
 
 export const isProblem = (f: Finding): boolean =>
   f.status === "new-over" || f.status === "regression" || f.status === "over";
@@ -81,9 +101,11 @@ function fileFindings(current: FileMetrics, baseline: FileMetrics | undefined, s
   const out: Finding[] = [];
   for (const m of FILE_METRICS) {
     const limit = s.limits[m];
-    const status = judge(current[m], limit, baseline?.[m], s.policy);
-    if (status && limit !== null) {
-      out.push({ path: current.path, line: 1, metric: m, value: current[m], limit, baseline: baseline?.[m], status });
+    const value = fileValue(current, m, s);
+    const before = baseline && fileValue(baseline, m, s);
+    const status = value === undefined ? undefined : judge(value, limit, before, s.policy);
+    if (status && limit !== null && value !== undefined) {
+      out.push({ path: current.path, line: 1, metric: m, value, limit, baseline: before, status });
     }
   }
   return out;
@@ -102,17 +124,21 @@ export function evaluateFile(current: FileMetrics, baseline: FileMetrics | undef
 
 export const METRIC_LABEL: Record<LimitKey, string> = {
   cognitiveComplexity: "cognitive complexity",
+  cyclomaticComplexity: "cyclomatic complexity",
   functionLines: "lines",
   nestingDepth: "nesting depth",
   parameters: "parameters",
   fileLines: "file lines",
   fileTokens: "estimated tokens",
   imports: "imports",
+  lcom: "cohesion (LCOM, unrelated groups)",
+  contextTokens: "context load (tokens incl. imports)",
 };
 
 export const HINT: Record<LimitKey, string> = {
   cognitiveComplexity:
     "extract branches into well-named helpers, return early, or replace nested conditions with a lookup",
+  cyclomaticComplexity: "reduce the number of paths: fewer branches and boolean conditions, or split by case",
   functionLines: "split it into smaller functions that each do one thing",
   nestingDepth: "use early returns / guard clauses to flatten the nesting",
   parameters: "group related parameters into an options object",
@@ -120,6 +146,8 @@ export const HINT: Record<LimitKey, string> = {
   fileTokens:
     "split the file so an agent only needs to read the part it changes",
   imports: "reduce dependencies or split the file by responsibility",
+  lcom: "the file or class does unrelated jobs: move each group into its own file or class",
+  contextTokens: "an agent reads this file and its imports to change it: split it, or depend on smaller modules",
 };
 
 export function describe(f: Finding): string {
