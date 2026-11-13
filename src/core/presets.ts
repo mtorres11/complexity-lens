@@ -21,7 +21,18 @@ const BASE: Pick<Config, "include" | "exclude" | "allowComment" | "tokens" | "ho
     "**/*.min.js",
   ],
   allowComment: { marker: "complexity-ok", requireReason: true },
-  tokens: { includeImports: 1 },
+  tokens: {
+    includeImports: 1,
+    ignoreImports: [
+      "**/generated/**",
+      "**/_generated/**",
+      "**/*.generated.*",
+      "**/*.examples.*",
+      "**/fixtures/**",
+      "**/__fixtures__/**",
+      "**/*.d.ts",
+    ],
+  },
   hotspots: { historyDays: 90 },
   verdicts: { fixCommits: 6, planCommits: 2 },
 };
@@ -104,7 +115,7 @@ export function defaultConfig(preset: PresetName = "recommended"): Config {
     hook: { ...p.hook },
     ci: { ...p.ci },
     allowComment: { ...BASE.allowComment },
-    tokens: { ...BASE.tokens },
+    tokens: { ...BASE.tokens, ignoreImports: [...BASE.tokens.ignoreImports] },
     hotspots: { ...BASE.hotspots },
     verdicts: { ...BASE.verdicts },
     overrides: [],

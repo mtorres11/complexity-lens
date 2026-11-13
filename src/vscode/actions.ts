@@ -10,10 +10,8 @@ import type { ActionKind, BatchKind } from "./protocol";
 
 async function copy(value: string, what: string): Promise<void> {
   await vscode.env.clipboard.writeText(value);
-  vscode.window.setStatusBarMessage(
-    `$(check) Complexity Lens: ${what} copied`,
-    3000,
-  );
+  const hint = /prompt/.test(what) ? " Paste it into your AI agent." : "";
+  void vscode.window.showInformationMessage(`Complexity Lens: ${what} copied to the clipboard.${hint}`);
 }
 
 /** Ticket drafts can be copied, or saved as a Markdown file the user picks. */
@@ -103,7 +101,7 @@ export async function runAction(
     return deps.setIgnored([...list].sort());
   }
   const d = await deps.detail(rel);
-  if (!d) return;
+  if (!d) throw new Error(`${rel} could not be analysed`);
   const fn = d.functions.find((f) => f.key === fnKey);
   if (kind === "fixPrompt")
     return copy(

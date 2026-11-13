@@ -87,6 +87,13 @@ function metrics(d: FileDetail): HTMLElement {
       { class: "muted small" },
       `= file ≈${fmtTokens(d.context.own)} + imports ≈${fmtTokens(d.context.fromImports)} · ${d.lines} lines`,
     ),
+    d.context.ignored.length
+      ? h(
+          "div",
+          { class: "muted small", title: d.context.ignored.join("\n") },
+          `${d.context.ignored.length} import(s) not counted (tokens.ignoreImports)`,
+        )
+      : null,
     h(
       "div",
       { class: "muted small" },

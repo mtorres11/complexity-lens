@@ -64,8 +64,10 @@ function splitText(d: FileDetail): string {
     (p) =>
       `${p.file} (${p.members.slice(0, 6).join(", ")}${p.members.length > 6 ? ", …" : ""})`,
   );
-  return `Split the file into: ${parts.join("; ")}. That saves about ${k(d.split.savesTokens)} tokens per edit.`;
+  return `Split the file into: ${parts.join("; ")}. That makes the file itself about ${k(d.split.savesTokens)} tokens smaller (imports not included).`;
 }
+
+const importsText = (d: FileDetail) => (d.context.importsAdvice ? `Context load: ${d.context.importsAdvice}.` : "");
 
 export function fileFixPrompt(d: FileDetail): string {
   const bad = d.functions.filter((f) => f.over).slice(0, 5);
@@ -79,6 +81,7 @@ export function fileFixPrompt(d: FileDetail): string {
       ? `Functions to simplify:\n${bad.map((f) => `- ${f.key} (line ${f.line}): ${functionProblem(f, d)}. ${f.advice.join(" ")}`).join("\n")}`
       : "",
     splitText(d),
+    importsText(d),
     "Update imports in the files that depend on it.",
     RULES,
     limitsLine(d),
@@ -106,6 +109,7 @@ function problemLines(d: FileDetail): string[] {
 
 function approachLines(d: FileDetail): string[] {
   const lines = d.split ? [`- ${splitText(d)}`] : [];
+  if (importsText(d)) lines.push(`- ${importsText(d)}`);
   for (const f of d.functions.filter((x) => x.over).slice(0, 5)) lines.push(`- Simplify \`${f.key}\`: ${f.advice[0] ?? "reduce branching and nesting"}`);
   return lines.length ? lines : ["- Reduce the metrics that are over their limits (see Problem)."];
 }

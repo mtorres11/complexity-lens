@@ -28,6 +28,21 @@ export interface Current {
   trusted: boolean;
 }
 
+const ACTION_TITLE: Record<(typeof ACTIONS)[number], string> = {
+  fixPrompt: "preparing the fix prompt",
+  ticket: "preparing the ticket draft",
+  chore: "preparing the chore",
+  accept: "accepting the function",
+  ignore: "ignoring the file",
+  unignore: "showing the file again",
+};
+const BATCH_TITLE: Record<(typeof BATCHES)[number], string> = {
+  fixAll: "preparing the fix-all prompt",
+  prSummary: "preparing the PR summary",
+  tickets: "preparing ticket drafts",
+  choreList: "preparing the chore list",
+};
+
 const oneOf = <T extends string>(v: unknown, list: readonly T[]): v is T =>
   typeof v === "string" && (list as readonly string[]).includes(v);
 
@@ -252,7 +267,8 @@ export class Sidebar implements vscode.WebviewViewProvider {
 
   private deps(project: Project) {
     const b = this.builder(project);
-    const p = this.progress(this.generation);
+    // User-requested actions must never be cancelled by a panel refresh.
+    const p: Progress = { onProgress: () => undefined, isCancelled: () => false };
     const key = this.ignoredKey(project);
     const ignored = () => this.ctx.workspaceState.get<string[]>(key, []);
     return {
@@ -268,27 +284,27 @@ export class Sidebar implements vscode.WebviewViewProvider {
     };
   }
 
-  private async action(
-    c: Current,
-    m: Extract<FromWebview, { type: "action" }>,
-  ): Promise<void> {
-    if (!c.project || !oneOf(m.kind, ACTIONS) || !this.allowed(c, m.path))
-      return;
-    if (m.kind === "accept" && !c.trusted)
-      return void vscode.window.showWarningMessage(
-        "Complexity Lens: trust this workspace to edit files.",
-      );
-    await runAction(
-      this.deps(c.project),
-      m.kind,
-      m.path,
-      typeof m.fn === "string" ? m.fn : undefined,
-    );
+  /** Runs a user action with a progress notification; failures are shown, never silent. */
+  private async guarded(title: string, run: () => Promise<void>): Promise<void> {
+    try {
+      await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: `Complexity Lens: ${title}…` }, run);
+    } catch (e) {
+      vscode.window.showErrorMessage(`Complexity Lens: ${title} failed: ${(e as Error).message}`);
+    }
+  }
+
+  private async action(c: Current, m: Extract<FromWebview, { type: "action" }>): Promise<void> {
+    if (!c.project || !oneOf(m.kind, ACTIONS) || !this.allowed(c, m.path)) return;
+    if (m.kind === "accept" && !c.trusted) return void vscode.window.showWarningMessage("Complexity Lens: trust this workspace to edit files.");
+    const project = c.project;
+    const fn = typeof m.fn === "string" ? m.fn : undefined;
+    await this.guarded(ACTION_TITLE[m.kind], () => runAction(this.deps(project), m.kind, m.path, fn));
   }
 
   private async batch(c: Current, kind: unknown): Promise<void> {
-    if (c.project && oneOf(kind, BATCHES))
-      await runBatch(this.deps(c.project), kind);
+    if (!c.project || !oneOf(kind, BATCHES)) return;
+    const project = c.project;
+    await this.guarded(BATCH_TITLE[kind], () => runBatch(this.deps(project), kind));
   }
 
   private html(webview: vscode.Webview, media: vscode.Uri): string {

@@ -176,8 +176,9 @@ function applySmallSections(v: Validator, raw: Obj, cfg: Config): void {
   section(v, raw.ci, "ci", ["mode"], (o) => {
     cfg.ci.mode = v.enumOf(o.mode, ENUMS.ci, "ci.mode") ?? cfg.ci.mode;
   });
-  section(v, raw.tokens, "tokens", ["includeImports"], (o) => {
+  section(v, raw.tokens, "tokens", ["includeImports", "ignoreImports"], (o) => {
     cfg.tokens.includeImports = v.int(o.includeImports, "tokens.includeImports", 0, 3) ?? cfg.tokens.includeImports;
+    cfg.tokens.ignoreImports = v.globs(o.ignoreImports, "tokens.ignoreImports") ?? cfg.tokens.ignoreImports;
   });
   section(v, raw.verdicts, "verdicts", ["fixCommits", "planCommits"], (o) => {
     cfg.verdicts.fixCommits = v.int(o.fixCommits, "verdicts.fixCommits", 1, 10000) ?? cfg.verdicts.fixCommits;

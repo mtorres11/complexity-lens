@@ -49,6 +49,8 @@ export interface FileMetrics {
   functions: FunctionMetrics[];
   /** Estimated tokens to read the file plus its imports; filled in by the project. */
   contextTokens?: number;
+  /** Largest counted import, used to advise when imports dominate the context load. */
+  contextLargestImport?: { path: string; tokens: number };
 }
 
 export function scriptKindFor(path: string): ts.ScriptKind {

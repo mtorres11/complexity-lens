@@ -2,6 +2,7 @@
 
 import type { ToWebview } from "../vscode/protocol";
 import { reportCard } from "./cards";
+import { applyReportFilters, renderReportFilters } from "./reportFilters";
 import { button, fmtTokens, h, link, select, send } from "./dom";
 import { renderFile } from "./file";
 import { renderFunction } from "./fn";
@@ -140,22 +141,19 @@ function notices(): HTMLElement[] {
 }
 
 function reportBody(): HTMLElement[] {
-  const rows = state.update?.data.report;
-  if (!rows) return [];
+  const all = state.update?.data.report;
+  if (!all) return [];
+  const rows = applyReportFilters(all);
   const problems = rows.reduce((n, r) => n + r.problems.length, 0);
   const tokens = rows.reduce((n, r) => n + r.contextTokens, 0);
-  const empty =
-    state.update?.scope === "changed"
-      ? "No changed files to check. Edit something, or switch Scope to Whole repo."
-      : "No matching files.";
+  const shown = rows.length === all.length ? `${rows.length} file(s)` : `${rows.length} of ${all.length} file(s)`;
+  const emptyText = all.length ? "No files match the filters." : state.update?.scope === "changed" ? "No changed files to check. Edit something, or switch Scope to Whole repo." : "No matching files.";
   return [
-    h(
-      "div",
-      { class: "summary" },
-      `${rows.length} file(s) · ${problems} problem(s) · context ≈${fmtTokens(tokens)} tokens`,
-    ),
-    rows.length ? null : h("div", { class: "empty muted" }, empty),
+    renderReportFilters(all),
+    h("div", { class: "summary" }, `${shown} · ${problems} problem(s) · context ≈${fmtTokens(tokens)} tokens`),
+    rows.length ? null : h("div", { class: "empty muted" }, emptyText),
     ...rows.slice(0, 300).map(reportCard),
+    rows.length > 300 ? h("div", { class: "muted small" }, `Showing the first 300 of ${rows.length}. Narrow the filters to see the rest.`) : null,
   ].filter((n): n is HTMLElement => !!n);
 }
 

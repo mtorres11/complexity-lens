@@ -1,6 +1,6 @@
 // Output formats: plain text, GitHub annotations, JSON.
 
-import { describe, Finding, HINT, isProblem } from "../core/evaluate";
+import { describe, Finding, hintFor, isProblem } from "../core/evaluate";
 
 export function groupByPath(findings: Finding[]): Map<string, Finding[]> {
   const out = new Map<string, Finding[]>();
@@ -37,7 +37,7 @@ export function github(
     .filter(isProblem)
     .map(
       (f) =>
-        `::${level} file=${escProp(f.path)},line=${f.line},title=${escProp("Complexity Lens")}::${escData(`${describe(f)}. Tip: ${HINT[f.metric]}.`)}`,
+        `::${level} file=${escProp(f.path)},line=${f.line},title=${escProp("Complexity Lens")}::${escData(`${describe(f)}. Tip: ${hintFor(f)}.`)}`,
     )
     .join("\n");
 }
@@ -62,10 +62,10 @@ export function agentMessage(
     lines.push(`  ${p}`);
     for (const f of list) lines.push(`    ✖ line ${f.line}  ${describe(f)}`);
   }
-  const metrics = [...new Set(problems.map((f) => f.metric))];
-  if (metrics.length) {
+  const hints = [...new Set(problems.map(hintFor))];
+  if (hints.length) {
     lines.push("  How to fix:");
-    for (const m of metrics) lines.push(`    - ${HINT[m]}`);
+    for (const hint of hints) lines.push(`    - ${hint}`);
   }
   lines.push(footer);
   return lines.join("\n");

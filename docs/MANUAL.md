@@ -1,6 +1,6 @@
 # Complexity Lens: user manual
 
-**Version 0.2.1** · Created by Marco Torres C · [Repository](https://github.com/mtorres11/complexity-lens)
+**Version 0.2.2** · Created by Marco Torres C · [Repository](https://github.com/mtorres11/complexity-lens)
 
 Complexity Lens shows **how complex your code is** and **how much it costs an AI agent to read**, for every file and
 function. It then keeps AI-written code simple with an **agent hook** (feedback right after each edit) and a
@@ -129,7 +129,7 @@ Tip: right-click the icon → **Move To → Secondary Side Bar** to keep it on t
 | **Coupling: Ce** (efferent) | Modules this file imports | 15 (`imports`) |
 | **Instability** | Ce ÷ (Ca + Ce): 0 = many depend on it (change carefully), 1 = it depends on many | (shown) |
 | **Cohesion: LCOM4** | Unrelated groups of code. In a class with 3+ methods: methods that share no fields and don't call each other. In a file at least half the line limit long: top-level functions/classes that never refer to each other or share state. 1 = cohesive. | 1 (`lcom`) |
-| **Context load** | Estimated tokens an AI agent reads to work on the file: the file **plus its relative imports** (≈3.5 characters per token) | 20000 (`contextTokens`) |
+| **Context load** | Estimated tokens an AI agent reads to work on the file: the file **plus its relative imports** (≈3.5 characters per token), except imports matched by `tokens.ignoreImports` | 20000 (`contextTokens`) |
 | **File lines** / **Tokens** | Length of the file / estimated tokens of the file alone | 400 / 8000 |
 
 ### Verdicts
@@ -193,6 +193,18 @@ Repo   [ Rules… ]  [ Agent hook… ]
 └────────────────────────────────────────────────────────┘
 ```
 
+**Filters** (under the controls):
+
+| Filter | Shows |
+| --- | --- |
+| **Verdict chips** `FIX 53 · PLAN 100 · LEAVE 100 · OK 1889` | Click a chip to hide or show that verdict (the numbers are counts) |
+| **Over:** *any metric* or one of cognitive, cyclomatic, nesting, function length, parameters, file lines, file tokens, coupling, cohesion, context load | Only files over that limit |
+| **Hotspots only** | Files changed at least `verdicts.fixCommits` times recently |
+| **Problems only** | Files your current changes made worse |
+| **Search** 🔎 | Files whose path contains the text |
+
+The summary then reads *N of M file(s)*. **Clear filters** shows everything again.
+
 - **File name:** opens the file. **🔍:** opens the deep analysis (below). **🛠:** opens **What to fix** for this file only.
 - **Badge:** FIX / PLAN / LEAVE / OK ([verdicts](#verdicts)). Hover it for what it means.
 - **Seven bars**, each coloured **green → mustard → red** as the value approaches and passes its limit. Hover for exact values.
@@ -250,7 +262,7 @@ and **Ignore** (the file name opens the file). At the bottom: **🎫 Ticket draf
 
 | Action | Produces |
 | --- | --- |
-| **✨ Fix with AI** | A prompt for your AI agent: the file or function, the exact problem and numbers, where the complexity is, the suggested fix, and the rules (*don't change behaviour, keep tests passing, no new dependencies, end within the limits*). Copied to the clipboard. |
+| **✨ Fix with AI** | A short progress note while it's prepared, then *“Fix prompt copied to the clipboard. Paste it into your AI agent.”* The prompt contains: the file or function, the exact problem and numbers, where the complexity is, the suggested fix, and the rules (*don't change behaviour, keep tests passing, no new dependencies, end within the limits*). Copied to the clipboard. |
 | **🎫 Ticket draft** | A Markdown ticket: title, problem (with the numbers), proposed approach (including the split), acceptance criteria, and a size. **Copy to clipboard** or **Save as Markdown file…** |
 | **🧹 Chore** | A one-line chore for small cleanups. Copied to the clipboard. |
 | **Accept…** | Asks for a reason, then adds `// complexity-ok: <reason>` above the function. |
@@ -332,7 +344,7 @@ Set any limit to `null` to switch that check off. The thresholds behind the verd
   "allowComment": { "marker": "complexity-ok", "requireReason": true },
   "hook": { "afterEdit": "nudge", "onFinish": "block", "maxRetries": 2 },
   "ci": { "mode": "warn" },
-  "tokens": { "includeImports": 1 },
+  "tokens": { "includeImports": 1, "ignoreImports": ["**/generated/**", "**/*.examples.*", "**/fixtures/**"] },
   "hotspots": { "historyDays": 90 },
   "overrides": [
     // Old code: tell me about problems at the end, but don't hold the agent back.
@@ -354,6 +366,7 @@ Set any limit to `null` to switch that check off. The thresholds behind the verd
 | `hook` | `afterEdit`: `off` / `inform` / `nudge`. `onFinish`: `off` / `inform` / `block`. `maxRetries`: 0–10. |
 | `ci.mode` | `off` / `warn` / `failOnRegression` / `failOverLimit` |
 | `tokens.includeImports` | Levels of relative imports added to the context load (0–3, default 1) |
+| `tokens.ignoreImports` | Imports that are listed but not counted in the context load: data an agent doesn't read to change the file. Default: `generated/`, `_generated/`, `*.generated.*`, `*.examples.*`, `fixtures/`, `__fixtures__/`, `*.d.ts`. Set `[]` to count everything. |
 | `verdicts.fixCommits` / `verdicts.planCommits` | Commits (in `hotspots.historyDays`) that make an over-limit file FIX or PLAN (default 6 / 2) |
 | `hotspots.historyDays` | How far back git history is counted (default 90) |
 | `overrides` | Different `limits`, `policy`, `hook` or `allowComment` for matching files, applied in order |
@@ -666,6 +679,12 @@ Details: [SECURITY.md](../SECURITY.md) and [SECURITY_ASSESSMENT.md](SECURITY_ASS
 
 **Is the context load exact?** No. It's an estimate (about 3.5 characters per token) of the file plus its relative imports.
 Use it to compare files, not as a bill.
+
+**Why is the context load still red after I split the file?** Because most of it comes from imports, and an entry file
+still imports what it uses. When imports make up at least half of the load, the hint, the fix prompt and the ticket
+draft name the largest import instead of suggesting a split. Slim that import, depend on a smaller module, or, if it's
+generated or data-only (examples, fixtures), add it to `tokens.ignoreImports`. The 🔍 deep analysis lists how many
+imports were not counted.
 
 **Why ratchet by default?** So you can adopt it in any codebase on day one without noise about code nobody touched.
 

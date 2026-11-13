@@ -156,3 +156,19 @@ button.secondary:disabled { opacity: 0.5; cursor: default; }
 a.mini { font-size: 0.85em; margin-left: 2px; text-decoration: none; }
 .fnfix { border: 1px solid var(--border); border-left: 3px solid var(--bad); border-radius: 4px; padding: 6px 8px; margin: 6px 0; background: var(--vscode-editor-background); }
 .fnfix-head { display: flex; align-items: baseline; gap: 6px; }
+
+/* ---------- v0.2.2: report filters ---------- */
+.filters { display: grid; gap: 4px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.chip {
+  font: inherit; font-size: 0.82em; font-weight: 700; letter-spacing: 0.03em; padding: 1px 8px; border-radius: 10px; cursor: pointer;
+  background: none; border: 1px solid currentColor;
+}
+.chip.v-fix { color: var(--bad); }
+.chip.v-plan { color: var(--warn); }
+.chip.v-leave { color: var(--muted); }
+.chip.v-ok { color: var(--ok); }
+.chip.off { opacity: 0.4; text-decoration: line-through; }
+.checks { flex-wrap: wrap; align-items: center; }
+.checks .chk { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 4px; font-size: 0.9em; }
+.checks .secondary { flex: 0 0 auto; width: auto; }

@@ -15,7 +15,7 @@ import { evaluateFile, Finding } from "./evaluate";
 import * as git from "./git";
 import { Churn, parseChurn } from "./churn";
 import { buildDependents, DependentsIndex } from "./dependents";
-import { normalizePath } from "./glob";
+import { matchesAny, normalizePath } from "./glob";
 
 export const CONFIG_FILE = "complexity-lens.json";
 const MAX_CONFIG_BYTES = 256 * 1024;
@@ -161,7 +161,9 @@ export class Project {
     if (!metrics) return { findings: [] };
     const base = this.baselineMetrics(relPath, baseRef);
     // Context load: the file plus its imports. The baseline reuses today's imports.
-    metrics.contextTokens = this.aiCost(relPath, undefined, metrics);
+    const ctx = this.contextBreakdown(relPath, undefined, metrics);
+    metrics.contextTokens = ctx.total;
+    metrics.contextLargestImport = ctx.imports[0];
     if (base) base.contextTokens = base.fileTokens + (metrics.contextTokens - metrics.fileTokens);
     return {
       metrics,
@@ -194,26 +196,40 @@ export class Project {
     return this.contextBreakdown(relPath, depth, rootMetrics).total;
   }
 
-  /** Context load split into the file itself and the files it imports (with their sizes). */
+  /**
+   * Context load split into the file itself and the files it imports (with their sizes).
+   * Imports matching tokens.ignoreImports are reported in `ignored` and not counted or followed.
+   */
   contextBreakdown(relPath: string, depth = this.config.tokens.includeImports, rootMetrics?: FileMetrics) {
     const seen = new Set<string>();
     const imports: { path: string; tokens: number }[] = [];
+    const ignored: string[] = [];
+    const ignore = this.config.tokens.ignoreImports;
     const visit = (rel: string, level: number): void => {
       if (seen.has(rel)) return;
       seen.add(rel);
+      if (level > 0 && matchesAny(rel, ignore)) return void ignored.push(rel);
       const m = rel === relPath && rootMetrics ? rootMetrics : this.metrics(rel);
       if (!m) return;
       if (level > 0) imports.push({ path: rel, tokens: m.fileTokens });
-      if (level >= depth) return;
+      if (level < depth) visitImports(rel, m, level + 1);
+    };
+    const visitImports = (rel: string, m: FileMetrics, level: number): void => {
       for (const spec of m.relativeImports) {
         const target = this.resolveImport(rel, spec);
-        if (target) visit(target, level + 1);
+        if (target) visit(target, level);
       }
     };
     visit(relPath, 0);
     const own = (rootMetrics ?? this.metrics(relPath))?.fileTokens ?? 0;
     const fromImports = imports.reduce((n, i) => n + i.tokens, 0);
-    return { own, fromImports, total: own + fromImports, imports: imports.sort((a, b) => b.tokens - a.tokens) };
+    return {
+      own,
+      fromImports,
+      total: own + fromImports,
+      imports: imports.sort((a, b) => b.tokens - a.tokens),
+      ignored: ignored.sort(),
+    };
   }
 
   resolveImport(fromRel: string, spec: string): string | undefined {

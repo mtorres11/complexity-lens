@@ -15,7 +15,7 @@ Created by **Marco Torres C** · <https://github.com/mtorres11/complexity-lens>
 
 | Piece | What it does |
 |---|---|
-| **Report** | Every changed file (or the whole repo) with a **FIX / PLAN / LEAVE / OK** verdict and seven bars (cognitive, cyclomatic, nesting, churn, coupling, cohesion, context load), coloured green → mustard → red. Click a file to open it, 🔍 for its deep analysis, or 🛠 for its fixes only. |
+| **Report** | Every changed file (or the whole repo), filterable by verdict, by the metric that's over its limit, hotspots, problems and path, with a **FIX / PLAN / LEAVE / OK** verdict and seven bars (cognitive, cyclomatic, nesting, churn, coupling, cohesion, context load), coloured green → mustard → red. Click a file to open it, 🔍 for its deep analysis, or 🛠 for its fixes only. |
 | **Deep analysis** | Per file: why it matters, every metric against its limit, churn trend, who depends on it, functions, a suggested split. Per function: where the complexity is (line by line) and how to fix it. |
 | **Your change** | Did my change make anything more complex? With *Fix all with AI* and *Copy PR summary*. |
 | **What to fix** | The whole repo ranked by payoff: complex × changed often × depended on. FIX / PLAN / LEAVE. Search for a file to see only its fixes, down to each function. |
@@ -35,7 +35,7 @@ Created by **Marco Torres C** · <https://github.com/mtorres11/complexity-lens>
 | Churn | Commits, lines changed and authors per file from recent git history, with a weekly trend. |
 | Coupling | Afferent (Ca: files that import it), efferent (Ce: what it imports) and instability. |
 | Cohesion (LCOM4) | Unrelated groups of code in a class or file; also drives the suggested split. |
-| Context load | Estimated tokens an AI agent reads to work on a file: the file plus its imports (≈3.5 characters per token, an estimate). |
+| Context load | Estimated tokens an AI agent reads to work on a file: the file plus its imports (≈3.5 characters per token, an estimate). Generated, example and fixture imports are not counted (`tokens.ignoreImports`). |
 | File lines | Size of each file. |
 
 ## Install

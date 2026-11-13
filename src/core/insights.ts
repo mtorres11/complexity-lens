@@ -6,7 +6,7 @@ import { functionAdvice, SplitSuggestion, suggestSplit } from "./advice";
 import { Churn, emptyChurn } from "./churn";
 import { FileSettings, Limits, settingsFor } from "./config";
 import { Coupling, coupling, DependentsIndex } from "./dependents";
-import { describe, evaluateFile, Finding, isProblem, judgedLcom } from "./evaluate";
+import { describe, evaluateFile, Finding, importsDominateHint, isProblem, judgedLcom } from "./evaluate";
 import type { Project } from "./project";
 import { decide, Decision } from "./verdict";
 
@@ -72,6 +72,10 @@ export interface FileDetail extends FileSummary {
     own: number;
     fromImports: number;
     imports: { path: string; tokens: number }[];
+    /** Imports matched by tokens.ignoreImports: listed, not counted. */
+    ignored: string[];
+    /** Set when the context load is over its limit mostly because of imports. */
+    importsAdvice?: string;
   };
   dependents: string[];
   internalImports: string[];
@@ -217,6 +221,7 @@ export function detail(
   const before = new Map((base?.functions ?? []).map((f) => [f.key, f]));
   const ctxLoad = project.contextBreakdown(rel);
   m.contextTokens = ctxLoad.total;
+  m.contextLargestImport = ctxLoad.imports[0];
   const internal = m.relativeImports
     .map((spec) => project.resolveImport(rel, spec))
     .filter((p): p is string => !!p);
@@ -240,6 +245,8 @@ export function detail(
       own: ctxLoad.own,
       fromImports: ctxLoad.fromImports,
       imports: ctxLoad.imports.slice(0, 20),
+      ignored: ctxLoad.ignored.slice(0, 20),
+      importsAdvice: summary.overLimits.includes("contextTokens") ? importsDominateHint(m) : undefined,
     },
     dependents: [...(ctx.dependents.get(rel) ?? [])].sort(),
     internalImports: internal,

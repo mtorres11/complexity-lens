@@ -29,6 +29,8 @@ export interface Finding {
   limit: number;
   baseline?: number;
   status: FindingStatus;
+  /** Advice specific to this finding; falls back to HINT[metric]. */
+  hint?: string;
 }
 
 const FUNCTION_METRICS = [
@@ -105,7 +107,8 @@ function fileFindings(current: FileMetrics, baseline: FileMetrics | undefined, s
     const before = baseline && fileValue(baseline, m, s);
     const status = value === undefined ? undefined : judge(value, limit, before, s.policy);
     if (status && limit !== null && value !== undefined) {
-      out.push({ path: current.path, line: 1, metric: m, value, limit, baseline: before, status });
+      const hint = m === "contextTokens" ? importsDominateHint(current) : undefined;
+      out.push({ path: current.path, line: 1, metric: m, value, limit, baseline: before, status, ...(hint ? { hint } : {}) });
     }
   }
   return out;
@@ -149,6 +152,26 @@ export const HINT: Record<LimitKey, string> = {
   lcom: "the file or class does unrelated jobs: move each group into its own file or class",
   contextTokens: "an agent reads this file and its imports to change it: split it, or depend on smaller modules",
 };
+
+const tok = (n: number) => (n >= 1000 ? `${Math.round(n / 100) / 10}k` : `${n}`);
+
+/**
+ * When imports are at least half of the context load, splitting the file itself can't bring
+ * it under the limit, so the advice points at the largest import instead.
+ */
+export function importsDominateHint(m: FileMetrics): string | undefined {
+  const largest = m.contextLargestImport;
+  const total = m.contextTokens ?? m.fileTokens;
+  const fromImports = total - m.fileTokens;
+  if (!largest || fromImports < m.fileTokens) return undefined;
+  return (
+    `most of it is imports (${tok(fromImports)} of ${tok(total)} tokens; largest: ${largest.path} ≈${tok(largest.tokens)}), ` +
+    "so splitting this file won't lower it: slim or split the largest import, import a smaller module, " +
+    "or add generated or data-only files to tokens.ignoreImports"
+  );
+}
+
+export const hintFor = (f: Finding): string => f.hint ?? HINT[f.metric];
 
 export function describe(f: Finding): string {
   const where = f.fn ? `${f.fn}` : "file";

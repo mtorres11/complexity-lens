@@ -1,7 +1,7 @@
 // The commented starter file written by `complexity-lens init` and the VS Code command.
 
 import type { PresetName } from "./config";
-import { PRESETS } from "./config";
+import { defaultConfig, PRESETS } from "./config";
 
 export function configTemplate(preset: PresetName = "recommended"): string {
   const p = PRESETS[preset];
@@ -46,8 +46,9 @@ export function configTemplate(preset: PresetName = "recommended"): string {
   // Pull request check: "off" | "warn" | "failOnRegression" | "failOverLimit".
   "ci": { "mode": "${p.ci.mode}" },
 
-  // AI cost also counts files this file imports, this many levels deep (0 = the file alone).
-  "tokens": { "includeImports": 1 },
+  // AI cost also counts files this file imports, this many levels deep (0 = the file alone),
+  // except imports matching ignoreImports (generated code, examples, fixtures: data, not logic).
+  "tokens": { "includeImports": 1, "ignoreImports": [${defaultConfig(preset).tokens.ignoreImports.map((g) => JSON.stringify(g)).join(", ")}] },
 
   // Hotspots look at how often files changed in git over this many days.
   "hotspots": { "historyDays": 90 },

@@ -61,7 +61,12 @@ export interface Config extends FileSettings {
   include: string[];
   exclude: string[];
   ci: { mode: CiMode };
-  tokens: { includeImports: number };
+  /**
+   * includeImports: how many levels of relative imports count toward context load.
+   * ignoreImports: imports matching these patterns are listed but not counted (generated
+   * code, examples, fixtures: data an agent doesn't need to read to change the file).
+   */
+  tokens: { includeImports: number; ignoreImports: string[] };
   hotspots: { historyDays: number };
   /** Commits in hotspots.historyDays that make an over-limit file FIX (hotspot) or PLAN. */
   verdicts: { fixCommits: number; planCommits: number };

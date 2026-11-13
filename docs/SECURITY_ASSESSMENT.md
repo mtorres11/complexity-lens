@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Version assessed | 0.2.1 |
+| Version assessed | 0.2.2 |
 | Date | 2026-11-12 |
 | Scope | Extension (`src/extension.ts`, `src/vscode/`), checker (`src/core/`, `src/cli/`), webview (`media/`), manifest, build and release pipeline, dependencies |
 | Result | No open high or medium findings. 0 known dependency vulnerabilities. No runtime dependencies outside the bundle. |
