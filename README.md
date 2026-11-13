@@ -6,6 +6,8 @@ and a **CI check** catches anything that slipped through.
 
 Created by **Marco Torres C** · <https://github.com/mtorres11/complexity-lens>
 
+📖 **[Full user manual and tutorials](docs/MANUAL.md)**: every metric and control, the agent hook, CI, team rollout, troubleshooting and FAQ.
+
 - **Local only.** No telemetry, no network calls. Your code never leaves your machine.
 - **TypeScript and JavaScript** (`.ts .tsx .js .jsx .mts .cts .mjs .cjs`).
 
