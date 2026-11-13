@@ -54,6 +54,9 @@ export class Project {
     string,
     { mtimeMs: number; metrics: FileMetrics }
   >();
+  /** Unsaved editor text per file, so metrics follow edits before they are saved. */
+  private readonly overlays = new Map<string, string>();
+  private readonly overlayCache = new Map<string, { text: string; metrics: FileMetrics }>();
 
   constructor(
     readonly root: string,
@@ -95,10 +98,23 @@ export class Project {
     }
   }
 
-  /** Current metrics of a file on disk (cached by modification time). */
+  /**
+   * Use this text instead of the file on disk until it is cleared (pass undefined),
+   * e.g. while a file has unsaved edits in the editor.
+   */
+  setOverlay(relPath: string, text: string | undefined): void {
+    if (text === undefined) {
+      this.overlays.delete(relPath);
+      this.overlayCache.delete(relPath);
+    } else this.overlays.set(relPath, text);
+  }
+
+  /** Current metrics of a file: unsaved editor text if any, else disk (cached by modification time). */
   metrics(relPath: string, text?: string): FileMetrics | undefined {
     const marker = settingsFor(this.config, relPath).allowComment.marker;
     if (text !== undefined) return analyzeSource(relPath, text, marker);
+    const pending = this.overlays.get(relPath);
+    if (pending !== undefined) return this.overlayMetrics(relPath, pending, marker);
     const abs = this.absolute(relPath);
     if (!abs) return undefined;
     let mtimeMs = 0;
@@ -113,6 +129,14 @@ export class Project {
     if (src === undefined) return undefined;
     const metrics = analyzeSource(relPath, src, marker);
     this.cache.set(relPath, { mtimeMs, metrics });
+    return metrics;
+  }
+
+  private overlayMetrics(relPath: string, text: string, marker: string): FileMetrics {
+    const hit = this.overlayCache.get(relPath);
+    if (hit && hit.text === text) return hit.metrics;
+    const metrics = analyzeSource(relPath, text, marker);
+    this.overlayCache.set(relPath, { text, metrics });
     return metrics;
   }
 

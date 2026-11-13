@@ -9,6 +9,7 @@ import { CONFIG_FILE, Project } from "./core/project";
 import { configTemplate } from "./core/template";
 import { installHook, refreshShim } from "./vscode/hookInstaller";
 import { ComplexityCodeLens, explain, LANGUAGES } from "./vscode/lens";
+import { clearUnsaved, watchUnsaved } from "./vscode/live";
 import { aboutFrom } from "./vscode/about";
 import { Sidebar } from "./vscode/sidebar";
 import { StatusBar } from "./vscode/statusBar";
@@ -69,14 +70,23 @@ function createUi(context: vscode.ExtensionContext, ws: Workspace): Ui {
   };
 }
 
-function registerListeners(context: vscode.ExtensionContext, ui: Ui, refreshAll: (reload?: boolean) => void): void {
+function registerListeners(context: vscode.ExtensionContext, ws: Workspace, ui: Ui, refreshAll: (reload?: boolean) => void): void {
   const watcher = vscode.workspace.createFileSystemWatcher(`**/${CONFIG_FILE}`);
+  const live = {
+    projectFor: (uri: vscode.Uri) => ws.projectFor(uri),
+    updateStatus: () => ui.status.update(vscode.window.activeTextEditor),
+    refreshSidebar: (ms: number) => ui.sidebar.refreshSoon(ms),
+  };
   context.subscriptions.push(
+    watchUnsaved(live),
     watcher,
     watcher.onDidChange(() => refreshAll(true)),
     watcher.onDidCreate(() => refreshAll(true)),
     watcher.onDidDelete(() => refreshAll(true)),
-    vscode.workspace.onDidSaveTextDocument(() => refreshAll()),
+    vscode.workspace.onDidSaveTextDocument((doc) => {
+      clearUnsaved(live, doc);
+      refreshAll();
+    }),
     vscode.workspace.onDidGrantWorkspaceTrust(() => refreshAll(true)),
     vscode.window.onDidChangeActiveTextEditor((e) => {
       ui.status.update(e);
@@ -125,7 +135,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.languages.registerCodeLensProvider(LANGUAGES.map((language) => ({ language, scheme: "file" })), ui.lens),
     ui.status,
   );
-  registerListeners(context, ui, refreshAll);
+  registerListeners(context, ws, ui, refreshAll);
   registerCommands(context, ws, refreshAll);
   ui.status.update(vscode.window.activeTextEditor);
 }
