@@ -1,13 +1,9 @@
 // DOM helpers for the sidebar. Everything is built with createElement/textContent (no innerHTML).
 // The CSP blocks inline style attributes, so sizes are set through the CSSOM (el.style.*).
 
-import type { FromWebview } from "../vscode/protocol";
 import { VERDICT_TEXT, Verdict } from "../core/verdict";
-
-declare function acquireVsCodeApi(): { postMessage(m: unknown): void };
-const vscode = acquireVsCodeApi();
-
-export const send = (m: FromWebview): void => vscode.postMessage(m);
+import type { FromWebview } from "../shared/protocol";
+import { send } from "./bridge";
 
 type Child = Node | string | null | undefined | false;
 type Attrs = Record<

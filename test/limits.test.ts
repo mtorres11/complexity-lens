@@ -7,7 +7,7 @@ import { defaultConfig, LIMIT_KEYS, PRESET_NAMES, settingsFor } from "../src/cor
 import { capitalize, formatTokens } from "../src/core/format";
 import { designNoteLines, guidance } from "../src/core/guidance";
 import { FILE_KEYS, FUNCTION_KEYS, functionMetricsText, functionOverLimits, isAllowed, isOver, METRIC, METRICS } from "../src/core/limits";
-import { Project } from "../src/core/project";
+import { Project } from "../src/node/project";
 import { VERDICT_TEXT, VERDICTS } from "../src/core/verdict";
 import { createConfigFile } from "../src/node/configFile";
 import { analyzeSource } from "../src/core/analyze";

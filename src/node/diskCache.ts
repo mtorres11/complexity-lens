@@ -5,8 +5,8 @@
 
 import * as fs from "fs";
 import * as path from "path";
-import type { FileMetrics } from "./analyze";
-import type { Churn } from "./churn";
+import type { FileMetrics } from "../core/analyze";
+import type { Churn } from "../core/churn";
 
 const FORMAT = 1;
 const FILE_NAME = "metrics-cache.json";

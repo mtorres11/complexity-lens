@@ -1,8 +1,9 @@
 // Action buttons. The webview only names the action, the file and the function; the host
 // builds every text from its own data.
 
-import type { ActionKind } from "../vscode/protocol";
-import { button, h, send } from "./dom";
+import type { ActionKind } from "../shared/protocol";
+import { button, h } from "./dom";
+import { send } from "./bridge";
 
 const BUTTON: Record<ActionKind, { label: string; title?: string }> = {
   fixPrompt: { label: "✨ Fix with AI", title: "Copy a prompt for your AI agent" },

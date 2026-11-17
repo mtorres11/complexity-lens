@@ -12,8 +12,8 @@ import * as fs from "fs";
 import * as path from "path";
 import { Finding, isProblem } from "../core/evaluate";
 import { allowCommentText } from "../core/config";
-import * as git from "../core/git";
-import { Project } from "../core/project";
+import * as git from "../node/git";
+import { Project } from "../node/project";
 import { agentMessage } from "./format";
 
 const EDIT_TOOLS = new Set(["Write", "Edit", "MultiEdit"]);

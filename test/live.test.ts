@@ -3,7 +3,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { test } from "node:test";
-import { Project } from "../src/core/project";
+import { Project } from "../src/node/project";
 
 const SIMPLE = "export function f(a: number) {\n  return a + 1;\n}\n";
 const BRANCHY =

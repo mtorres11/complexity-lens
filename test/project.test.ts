@@ -3,8 +3,9 @@ import { strict as assert } from "node:assert";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { test } from "node:test";
-import * as git from "../src/core/git";
-import { CONFIG_FILE, loadConfig, Project } from "../src/core/project";
+import * as git from "../src/node/git";
+import { CONFIG_FILE, loadConfig } from "../src/node/configFile";
+import { Project } from "../src/node/project";
 import { commit, folder, git as run, gitRepo, SIMPLE, tempDir } from "./helpers";
 
 test("resolveImport: extensions, index files, .js written for .ts, and nothing outside the repo", () => {

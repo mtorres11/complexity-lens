@@ -4,8 +4,8 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { test } from "node:test";
-import { DiskCache } from "../src/core/diskCache";
-import { Project } from "../src/core/project";
+import { DiskCache } from "../src/node/diskCache";
+import { Project } from "../src/node/project";
 
 const SIMPLE = "export function a(x: number) {\n  return x + 1;\n}\n";
 const BRANCHY =

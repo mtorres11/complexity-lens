@@ -3,7 +3,8 @@
 
 import type { FileSummary } from "../core/insights";
 import { actionButton } from "./actions";
-import { button, h, select, send } from "./dom";
+import { button, h, select } from "./dom";
+import { send } from "./bridge";
 import { fileHeader, itemList } from "./cards";
 import { searchBox } from "./search";
 import { matchesFilter, state } from "./state";

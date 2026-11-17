@@ -4,7 +4,7 @@
 |---|---|
 | Version assessed | 0.2.2 |
 | Date | 2026-11-12 |
-| Scope | Extension (`src/extension.ts`, `src/vscode/`), checker (`src/core/`, `src/cli/`), webview (`media/`), manifest, build and release pipeline, dependencies |
+| Scope | Extension (`src/extension.ts`, `src/vscode/`), panel logic and protocol (`src/app/`, `src/shared/`), checker (`src/core/`, `src/node/`, `src/cli/`), webview (`src/webview/`, `media/`), manifest, build and release pipeline, dependencies |
 | Result | No open high or medium findings. 0 known dependency vulnerabilities. No runtime dependencies outside the bundle. |
 
 ## 1. Architecture
@@ -16,14 +16,15 @@
  │                status bar             │       │       /cli.js hook post-edit  │
  │        │                              │       │ CI:   node complexity-lens-   │
  │        ▼                              │       │       cli.js check --base ... │
- │ core/ (shared with the CLI)           │◀──────┤       (same core/ code)       │
+ │ core/ + node/ (shared with the CLI)   │◀──────┤       (same core/ code)       │
  │  analyze  - TypeScript parser only    │       └───────────────────────────────┘
  │  config   - validated repo rules      │
  │  evaluate - ratchet / absolute        │       Reads: source files, complexity-lens.json,
  │  git      - read-only, no shell       │              git history (read-only)
  │  project  - paths confined to repo    │       Writes: only what the user confirms
  └──────────────────────────────────────┘               (config file, hook settings,
- Webview: strict CSP, nonce script, no network,          ~/.complexity-lens/cli.js) and a
+ app/panel: validates every panel message      ~/.complexity-lens/cli.js) and a
+ Webview: strict CSP, nonce script, no network,
           DOM built with textContent only                 retry counter inside .git/
 ```
 

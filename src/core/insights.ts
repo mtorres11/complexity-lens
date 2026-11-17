@@ -4,12 +4,11 @@
 import type { FileMetrics, FunctionMetrics, Increment } from "./analyze";
 import { functionAdvice, SplitSuggestion, suggestSplit } from "./advice";
 import { Churn, emptyChurn } from "./churn";
-import type { FileSettings, Limits } from "./config";
+import type { Config, FileSettings, Limits } from "./config";
 import { ContextLoad, contextTokensOf } from "./context";
 import { Coupling, coupling, DependentsIndex } from "./dependents";
-import { describe, evaluateFile, Finding, importsDominateHint, isProblem } from "./evaluate";
+import { describe, Evaluation, evaluateFile, Finding, importsDominateHint, isProblem } from "./evaluate";
 import { functionOverLimits, FunctionValues, judgedLcom } from "./limits";
-import type { Project } from "./project";
 import { decide, Decision } from "./verdict";
 
 export interface Item {
@@ -75,6 +74,16 @@ export interface FileDetail extends FileSummary {
   split?: SplitSuggestion;
 }
 
+/** What the view models need from a repository (implemented by the node Project). */
+export interface ProjectReader {
+  readonly config: Config;
+  settings(rel: string): FileSettings;
+  metrics(rel: string): FileMetrics | undefined;
+  contextBreakdown(rel: string): ContextLoad;
+  evaluate(rel: string, baseRef: string): Evaluation;
+  resolveImport(fromRel: string, spec: string): string | undefined;
+}
+
 export interface InsightContext {
   churn: Map<string, Churn>;
   dependents: DependentsIndex;
@@ -119,7 +128,7 @@ interface Measured {
 }
 
 /** Current metrics, baseline, context load and findings; unchanged files skip the git read. */
-function measure(project: Project, rel: string, ctx: InsightContext): Measured | undefined {
+function measure(project: ProjectReader, rel: string, ctx: InsightContext): Measured | undefined {
   const s = project.settings(rel);
   if (ctx.changed && !ctx.changed.has(rel)) {
     const m = project.metrics(rel);
@@ -131,7 +140,7 @@ function measure(project: Project, rel: string, ctx: InsightContext): Measured |
   return m && context && { m, base, context, findings, s };
 }
 
-function summaryOf(rel: string, x: Measured, project: Project, ctx: InsightContext): FileSummary {
+function summaryOf(rel: string, x: Measured, project: ProjectReader, ctx: InsightContext): FileSummary {
   const { m, base, context, findings, s } = x;
   const churn = ctx.churn.get(rel) ?? emptyChurn(13);
   const ca = ctx.dependents.get(rel)?.size ?? 0;
@@ -154,7 +163,7 @@ function summaryOf(rel: string, x: Measured, project: Project, ctx: InsightConte
   };
 }
 
-export function summarize(project: Project, rel: string, ctx: InsightContext): FileSummary | undefined {
+export function summarize(project: ProjectReader, rel: string, ctx: InsightContext): FileSummary | undefined {
   const x = measure(project, rel, ctx);
   return x && summaryOf(rel, x, project, ctx);
 }
@@ -185,7 +194,7 @@ function functionDetail(
 }
 
 export function detail(
-  project: Project,
+  project: ProjectReader,
   rel: string,
   ctx: InsightContext,
 ): FileDetail | undefined {

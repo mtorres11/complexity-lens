@@ -3,8 +3,8 @@ import { strict as assert } from "node:assert";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { test } from "node:test";
-import { Project } from "../src/core/project";
-import { DataBuilder, Progress } from "../src/vscode/data";
+import { Project } from "../src/node/project";
+import { DataBuilder, Progress } from "../src/app/data";
 import { commit, COMPLEX, git, gitRepo, SIMPLE } from "./helpers";
 
 const progress: Progress = { onProgress: () => undefined, isCancelled: () => false };

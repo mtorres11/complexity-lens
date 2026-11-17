@@ -5,7 +5,7 @@ import type { FileMetrics } from "../core/analyze";
 import type { Limits } from "../core/config";
 import { formatTokens } from "../core/format";
 import { isOver } from "../core/limits";
-import type { Project } from "../core/project";
+import type { Project } from "../node/project";
 
 function texts(m: FileMetrics, limits: Limits): { text: string; tooltip: string } {
   const worst = Math.max(0, ...m.functions.map((f) => f.cognitiveComplexity));

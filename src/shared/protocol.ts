@@ -1,4 +1,4 @@
-// Messages between the extension host and the sidebar webview.
+// Messages between the host (the editor extension) and the sidebar panel.
 
 import type { FileDetail, FileSummary } from "../core/insights";
 
@@ -28,6 +28,16 @@ export interface ViewData {
   };
 }
 
+/** Wording that depends on the host editor (its name for restricted workspaces, its setting names). */
+export interface HostWording {
+  /** Notice shown when the workspace isn't trusted. */
+  untrusted: string;
+  /** Tooltip of the agent-hook button when the workspace isn't trusted. */
+  trustFirst: string;
+  /** Notice shown when only the first files were analysed. */
+  truncated: string;
+}
+
 export interface UpdateMessage {
   type: "update";
   tab: Tab;
@@ -38,6 +48,7 @@ export interface UpdateMessage {
   trusted: boolean;
   configErrors: string[];
   about: { author: string; version: string; hasRepo: boolean };
+  wording: HostWording;
   /** Commits that make an over-limit file a hotspot (for the churn bar). */
   fixCommits: number;
   loading: boolean;

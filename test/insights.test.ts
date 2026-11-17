@@ -4,7 +4,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { test } from "node:test";
 import { detail, InsightContext, summarize } from "../src/core/insights";
-import { Project } from "../src/core/project";
+import { Project } from "../src/node/project";
 import { COMPLEX, folder, gitRepo, SIMPLE } from "./helpers";
 
 const METHODS = `import { u } from "./u";

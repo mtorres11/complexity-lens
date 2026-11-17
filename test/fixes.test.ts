@@ -12,7 +12,7 @@ import { allowCommentText, defaultConfig, settingsFor } from "../src/core/config
 import { HINT } from "../src/core/evaluate";
 import { detail, summarize } from "../src/core/insights";
 import type { FileSummary } from "../src/core/insights";
-import { Project } from "../src/core/project";
+import { Project } from "../src/node/project";
 
 const BRANCHY = "export function f(a: number, b: number, c: number, d: number, e: number, g: number) {\n  if (a) { if (b) { if (c) return d; } }\n  return e + g;\n}\n";
 

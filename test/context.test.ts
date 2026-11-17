@@ -5,7 +5,7 @@ import * as path from "node:path";
 import { test } from "node:test";
 import { resolveConfig } from "../src/core/configParse";
 import { agentMessage } from "../src/cli/format";
-import { Project } from "../src/core/project";
+import { Project } from "../src/node/project";
 
 const BIG_DATA = `export const data = ${JSON.stringify(Array.from({ length: 400 }, (_, i) => `value-${i}`))};\n`;
 const ENTRY =

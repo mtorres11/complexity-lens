@@ -8,8 +8,8 @@ import {
   detail,
   summarize,
 } from "../core/insights";
-import type { Project } from "../core/project";
-import type { Scope, Sort, ViewData } from "./protocol";
+import type { Project } from "../node/project";
+import type { Scope, Sort, ViewData } from "../shared/protocol";
 
 const yieldToEditor = () => new Promise<void>((r) => setImmediate(r));
 

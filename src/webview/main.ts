@@ -1,10 +1,11 @@
 // Complexity Lens sidebar entry point: tabs, drill-down screens, notices and the footer.
 
 import { formatTokens } from "../core/format";
-import { Scope, SCOPES, Sort, SORTS, Tab, TABS, ToWebview } from "../vscode/protocol";
+import { Scope, SCOPES, Sort, SORTS, Tab, TABS, ToWebview } from "../shared/protocol";
 import { reportCard } from "./cards";
 import { applyReportFilters, renderReportFilters } from "./reportFilters";
-import { button, h, link, select, send } from "./dom";
+import { button, h, link, select } from "./dom";
+import { onMessage, send } from "./bridge";
 import { renderFile } from "./file";
 import { renderFunction } from "./fn";
 import { back, home, requestDetail, state, top } from "./state";
@@ -79,9 +80,7 @@ function reportControls(): HTMLElement {
         button("Rules…", () => send({ type: "openConfig" })),
         button("Agent hook…", () => send({ type: "installHook" }), {
           disabled: !u.trusted,
-          title: u.trusted
-            ? "Add the agent hook to this repo"
-            : "Trust the workspace first",
+          title: u.trusted ? "Add the agent hook to this repo" : u.wording.trustFirst,
         }),
       ),
     ),
@@ -92,14 +91,7 @@ function notices(): HTMLElement[] {
   const u = state.update;
   if (!u) return [];
   const out: HTMLElement[] = [];
-  if (!u.trusted)
-    out.push(
-      h(
-        "div",
-        { class: "notice" },
-        "Restricted Mode: git features (changes, churn, comparisons) are off.",
-      ),
-    );
+  if (!u.trusted) out.push(h("div", { class: "notice" }, u.wording.untrusted));
   for (const e of u.configErrors)
     out.push(h("div", { class: "notice" }, `complexity-lens.json: ${e}`));
   if (u.error) out.push(h("div", { class: "error" }, `⚠ ${u.error}`));
@@ -114,14 +106,7 @@ function notices(): HTMLElement[] {
           : "Analysing…",
       ),
     );
-  if (u.truncated)
-    out.push(
-      h(
-        "div",
-        { class: "muted small" },
-        "Only the first files were analysed (see complexityLens.maxFiles).",
-      ),
-    );
+  if (u.truncated) out.push(h("div", { class: "muted small" }, u.wording.truncated));
   return out;
 }
 
@@ -214,8 +199,7 @@ function render(): void {
 }
 state.render = render;
 
-window.addEventListener("message", (e: MessageEvent<ToWebview>) => {
-  const m = e.data;
+onMessage((m: ToWebview) => {
   if (m?.type === "progress") {
     state.progress = m;
     if (state.update?.loading) render();

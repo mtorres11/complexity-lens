@@ -1,5 +1,5 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": { "outDir": "out-test", "rootDir": ".", "esModuleInterop": false },
-  "include": ["src/core", "src/cli", "src/node", "src/vscode/data.ts", "src/vscode/protocol.ts", "test"]
+  "include": ["src/core", "src/cli", "src/node", "src/app", "src/shared", "test"]
 }

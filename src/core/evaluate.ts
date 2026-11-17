@@ -36,6 +36,14 @@ export interface Finding {
   hint?: string;
 }
 
+/** One file measured and judged: metrics, baseline, context load and findings. */
+export interface Evaluation {
+  metrics?: FileMetrics;
+  base?: FileMetrics;
+  context?: ContextLoad;
+  findings: Finding[];
+}
+
 export const isProblem = (f: Finding): boolean =>
   f.status === "new-over" || f.status === "regression" || f.status === "over";
 

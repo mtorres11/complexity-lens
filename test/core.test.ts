@@ -13,7 +13,7 @@ import { parseChurn } from "../src/core/churn";
 import { buildDependents, coupling } from "../src/core/dependents";
 import { decide } from "../src/core/verdict";
 import { functionAdvice, suggestSplit } from "../src/core/advice";
-import { isSafeRef } from "../src/core/git";
+import { isSafeRef } from "../src/node/git";
 
 const cc = (src: string, name: string) => {
   const fn = analyzeSource("a.ts", src).functions.find((f) => f.name === name);

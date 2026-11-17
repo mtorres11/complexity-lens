@@ -2,8 +2,8 @@
 // (file analysis, function analysis) with a Back button.
 
 import type { FileDetail } from "../core/insights";
-import type { UpdateMessage } from "../vscode/protocol";
-import { send } from "./dom";
+import type { UpdateMessage } from "../shared/protocol";
+import { send } from "./bridge";
 
 export type Screen =
   | { kind: "file"; path: string }

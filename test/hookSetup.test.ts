@@ -55,3 +55,8 @@ test("refreshShim copies the CLI only when asked, updates only its own file, and
     process.env.HOME = home;
   }
 });
+
+test("hook commands run the CLI copy through $HOME, guarded for teammates without it", () => {
+  assert.equal(HOOKS.Stop.hooks[0].command, '[ -f "$HOME/.complexity-lens/cli.js" ] && node "$HOME/.complexity-lens/cli.js" hook stop || true');
+  assert.match(HOOKS.PostToolUse.hooks[0].command, /hook post-edit \|\| true$/);
+});

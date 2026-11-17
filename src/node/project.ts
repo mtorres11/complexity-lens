@@ -3,7 +3,7 @@
 import { createHash } from "crypto";
 import * as fs from "fs";
 import * as path from "path";
-import { analyzeSource, FileMetrics } from "./analyze";
+import { analyzeSource, FileMetrics } from "../core/analyze";
 import {
   Config,
   FileSettings,
@@ -11,20 +11,18 @@ import {
   LoadResult,
   Policy,
   settingsFor,
-} from "./config";
-import type { ContextLoad } from "./context";
-import { resolveConfig } from "./configParse";
-import { parseJsonc } from "./jsonc";
-import { evaluateFile, Finding } from "./evaluate";
+} from "../core/config";
+import type { ContextLoad } from "../core/context";
+import { Evaluation, evaluateFile } from "../core/evaluate";
+import type { ProjectReader } from "../core/insights";
 import * as git from "./git";
-import { Churn, parseChurn } from "./churn";
-import { buildDependents, DependentsIndex } from "./dependents";
-import { matchesAny, normalizePath } from "./glob";
+import { Churn, parseChurn } from "../core/churn";
+import { buildDependents, DependentsIndex } from "../core/dependents";
+import { matchesAny, normalizePath } from "../core/glob";
 import { DiskCache } from "./diskCache";
-import { walk } from "../node/walk";
+import { loadConfig } from "./configFile";
+import { walk } from "./walk";
 
-export const CONFIG_FILE = "complexity-lens.json";
-const MAX_CONFIG_BYTES = 256 * 1024;
 const MAX_SOURCE_BYTES = 2 * 1024 * 1024;
 const RESOLVE_EXT = [".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"];
 
@@ -35,14 +33,9 @@ export interface ProjectOptions {
   policy?: Policy;
 }
 
-export interface Evaluation {
-  metrics?: FileMetrics;
-  base?: FileMetrics;
-  context?: ContextLoad;
-  findings: Finding[];
-}
 
-export class Project {
+
+export class Project implements ProjectReader {
   readonly loaded: LoadResult;
   private readonly refCache = new Map<string, { at: number; commit?: string }>();
   private readonly trees = new Map<string, Map<string, string>>();
@@ -354,26 +347,4 @@ function gitBlobId(text: string, idLength: number): string {
     .update(`blob ${body.length}\0`)
     .update(body)
     .digest("hex");
-}
-
-export function loadConfig(root: string): LoadResult {
-  const file = path.join(root, CONFIG_FILE);
-  try {
-    const st = fs.lstatSync(file);
-    if (!st.isFile()) return resolveConfig(undefined);
-    if (st.size > MAX_CONFIG_BYTES) {
-      const r = resolveConfig(undefined);
-      r.errors.push(
-        `${CONFIG_FILE} is larger than ${MAX_CONFIG_BYTES / 1024} KB and was ignored`,
-      );
-      return r;
-    }
-    return resolveConfig(parseJsonc(fs.readFileSync(file, "utf8")));
-  } catch (e) {
-    if ((e as NodeJS.ErrnoException).code === "ENOENT")
-      return resolveConfig(undefined);
-    const r = resolveConfig(undefined);
-    r.errors.push(`${CONFIG_FILE}: ${(e as Error).message}`);
-    return r;
-  }
 }

@@ -6,12 +6,16 @@ import * as os from "os";
 import * as path from "path";
 
 const CLI_MARKER = "complexity-lens-cli";
-export const shimDir = () => path.join(os.homedir(), ".complexity-lens");
-export const shimPath = () => path.join(shimDir(), "cli.js");
+/** The CLI copy lives at ~/.complexity-lens/cli.js. */
+const SHIM_DIR = ".complexity-lens";
+const SHIM_FILE = "cli.js";
+export const shimDir = () => path.join(os.homedir(), SHIM_DIR);
+export const shimPath = () => path.join(shimDir(), SHIM_FILE);
 
-// Guarded so teammates without the extension get a silent no-op instead of an error.
-const command = (event: "post-edit" | "stop") =>
-  `[ -f "$HOME/.complexity-lens/cli.js" ] && node "$HOME/.complexity-lens/cli.js" hook ${event} || true`;
+// The same file through $HOME, so the settings work for every teammate. Guarded so teammates
+// without the extension get a silent no-op instead of an error.
+const SHELL_SHIM = `"$HOME/${SHIM_DIR}/${SHIM_FILE}"`;
+const command = (event: "post-edit" | "stop") => `[ -f ${SHELL_SHIM} ] && node ${SHELL_SHIM} hook ${event} || true`;
 
 type HookEntry = {
   matcher?: string;

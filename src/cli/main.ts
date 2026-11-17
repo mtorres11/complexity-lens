@@ -3,9 +3,9 @@
 import * as path from "path";
 import { CI_MODES, CiMode, POLICIES, PRESET_NAMES } from "../core/config";
 import { Finding, isProblem } from "../core/evaluate";
-import * as git from "../core/git";
-import { CONFIG_FILE, Project } from "../core/project";
-import { createConfigFile } from "../node/configFile";
+import * as git from "../node/git";
+import { CONFIG_FILE, createConfigFile } from "../node/configFile";
+import { Project } from "../node/project";
 import * as format from "./format";
 import { onFinish, postEdit } from "./hook";
 

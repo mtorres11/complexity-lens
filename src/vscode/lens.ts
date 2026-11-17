@@ -4,7 +4,7 @@ import * as vscode from "vscode";
 import type { Limits } from "../core/config";
 import { FUNCTION_METRICS, isOver, METRIC } from "../core/limits";
 import type { FunctionMetrics } from "../core/analyze";
-import type { Project } from "../core/project";
+import type { Project } from "../node/project";
 
 export const LANGUAGES = [
   "typescript",

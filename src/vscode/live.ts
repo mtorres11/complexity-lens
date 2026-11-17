@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import type { Project } from "../core/project";
+import type { Project } from "../node/project";
 import { LANGUAGES } from "./lens";
 
 /** How long typing must pause before the sidebar and status bar catch up with unsaved edits. */
