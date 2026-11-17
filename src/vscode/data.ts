@@ -1,7 +1,6 @@
 // Computes what each tab shows. Work runs in batches that yield to the editor, and the
 // reverse-import index (afferent coupling) is built once per refresh from cached metrics.
 
-import * as git from "../core/git";
 import {
   FileDetail,
   FileSummary,
@@ -22,7 +21,7 @@ export interface Progress {
 const SORTERS: Record<Sort, (a: FileSummary, b: FileSummary) => number> = {
   payoff: (a, b) => b.payoff - a.payoff,
   aiCost: (a, b) => b.contextTokens - a.contextTokens,
-  complexity: (a, b) => b.cognitive - a.cognitive,
+  complexity: (a, b) => b.cognitiveComplexity - a.cognitiveComplexity,
   churn: (a, b) => b.churn.commits - a.churn.commits,
   name: (a, b) => a.path.localeCompare(b.path),
 };
@@ -131,14 +130,8 @@ export class DataBuilder {
   ): Promise<{ data: ViewData; truncated: boolean } | undefined> {
     const c = await this.context(p);
     if (!c) return undefined;
-    const ref =
-      compare === "HEAD" || !git.isSafeRef(compare)
-        ? "HEAD"
-        : git.mergeBase(this.project.root, compare);
-    const files = this.project.files(
-      "changed",
-      compare === "HEAD" ? "HEAD" : compare,
-    );
+    const ref = this.project.baseRefFor(compare);
+    const files = this.project.files("changed", ref);
     const items = await this.summaries(files, { ...c.ctx, baseRef: ref }, p);
     return (
       items && {

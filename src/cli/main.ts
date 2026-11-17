@@ -1,12 +1,11 @@
 // complexity-lens command line: check | hook post-edit | hook stop | init | help
 
-import * as fs from "fs";
 import * as path from "path";
-import { CiMode, Policy, PresetName } from "../core/config";
+import { CI_MODES, CiMode, POLICIES, PRESET_NAMES } from "../core/config";
 import { Finding, isProblem } from "../core/evaluate";
 import * as git from "../core/git";
 import { CONFIG_FILE, Project } from "../core/project";
-import { configTemplate } from "../core/template";
+import { createConfigFile } from "../node/configFile";
 import * as format from "./format";
 import { onFinish, postEdit } from "./hook";
 
@@ -17,20 +16,22 @@ export interface Io {
   stdin(): Promise<string>;
 }
 
+const FORMATS = ["text", "github", "json"] as const;
+
 const HELP = `Complexity Lens: code complexity and AI reading cost.
 
 Usage:
-  complexity-lens check [--base <ref>] [--all] [--policy ratchet|absolute] [--format text|github|json] [--mode <ciMode>] [files...]
+  complexity-lens check [--base <ref>] [--all] [--policy ${POLICIES.join("|")}] [--format ${FORMATS.join("|")}] [--mode <ciMode>] [files...]
       Check changed files (default: since the last commit; with --base, since the branch
       forked from <ref>), all included files (--all), or the files listed.
       --policy absolute audits existing code too (the repo config's policy is ignored).
       Exit code: 0 = pass, 1 = failed (per ci.mode), 2 = usage or config error.
   complexity-lens hook post-edit     Agent hook: run after each file edit (reads JSON on stdin)
   complexity-lens hook stop          Agent hook: run when the agent tries to finish
-  complexity-lens init [--preset relaxed|recommended|strict]
+  complexity-lens init [--preset ${PRESET_NAMES.join("|")}]
       Create ${CONFIG_FILE} with every option explained.
 
-ci modes: off, warn, failOnRegression, failOverLimit
+ci modes: ${CI_MODES.join(", ")}
 `;
 
 interface Args {
@@ -60,20 +61,21 @@ function parseArgs(argv: string[]): Args {
 
 class UsageError extends Error {}
 
-function flag(
-  args: Args,
-  name: string,
-  allowed?: readonly string[],
-): string | undefined {
+function flag(args: Args, name: string): string | undefined {
   const v = args.flags.get(name);
-  if (v === undefined) return undefined;
   if (v === true) throw new UsageError(`${name} needs a value`);
-  if (allowed && !allowed.includes(v))
-    throw new UsageError(`${name} must be one of: ${allowed.join(", ")}`);
   return v;
 }
 
-function openProject(args: Args, policy?: Policy): Project {
+/** A flag that must be one of `allowed`. */
+function choice<T extends string>(args: Args, name: string, allowed: readonly T[]): T | undefined {
+  const v = flag(args, name);
+  if (v !== undefined && !(allowed as readonly string[]).includes(v))
+    throw new UsageError(`${name} must be one of: ${allowed.join(", ")}`);
+  return v as T | undefined;
+}
+
+function openProject(args: Args, policy?: (typeof POLICIES)[number]): Project {
   const cwd = path.resolve(flag(args, "--cwd") ?? process.cwd());
   return new Project(git.repoRoot(cwd) ?? cwd, { useGit: true, policy });
 }
@@ -98,19 +100,19 @@ function checkOptions(args: Args, project: Project) {
   if (!git.isSafeRef(base)) throw new UsageError(`--base: "${base}" is not a valid git ref`);
   return {
     base,
-    fmt: flag(args, "--format", ["text", "github", "json"]) ?? "text",
-    mode: (flag(args, "--mode", ["off", "warn", "failOnRegression", "failOverLimit"]) ?? project.config.ci.mode) as CiMode,
+    fmt: choice(args, "--format", FORMATS) ?? "text",
+    mode: choice(args, "--mode", CI_MODES) ?? project.config.ci.mode,
   };
 }
 
-function filesToCheck(args: Args, project: Project, base: string): string[] {
-  if (!args.positional.length) return project.files(args.flags.has("--all") ? "all" : "changed", base);
+function filesToCheck(args: Args, project: Project, baseRef: string): string[] {
+  if (!args.positional.length) return project.files(args.flags.has("--all") ? "all" : "changed", baseRef);
   return args.positional
     .map((f) => project.relative(path.resolve(f)))
     .filter((f): f is string => f !== undefined && project.includes(f));
 }
 
-function render(fmt: string, findings: Finding[], failed: boolean): string {
+function render(fmt: (typeof FORMATS)[number], findings: Finding[], failed: boolean): string {
   if (fmt === "json") return format.json(findings);
   if (fmt === "github") return format.github(findings, failed ? "error" : "warning");
   return format.text(findings);
@@ -118,12 +120,12 @@ function render(fmt: string, findings: Finding[], failed: boolean): string {
 
 function check(args: Args, io: Io): number {
   // --policy is a one-off audit: every file is judged with it, ignoring the repo's choice.
-  const project = openProject(args, flag(args, "--policy", ["ratchet", "absolute"]) as Policy | undefined);
+  const project = openProject(args, choice(args, "--policy", POLICIES));
   if (!reportConfig(project, io)) return 2;
   const { base, fmt, mode } = checkOptions(args, project);
   if (mode === "off") return 0;
-  const baseRef = base === "HEAD" ? "HEAD" : git.mergeBase(project.root, base);
-  const findings = filesToCheck(args, project, base).flatMap((f) => project.evaluate(f, baseRef).findings);
+  const baseRef = project.baseRefFor(base);
+  const findings = filesToCheck(args, project, baseRef).flatMap((f) => project.evaluate(f, baseRef).findings);
   const code = exitCodeFor(mode, findings);
   const out = render(fmt, findings, code !== 0);
   if (out) io.stdout(out + "\n");
@@ -131,20 +133,15 @@ function check(args: Args, io: Io): number {
 }
 
 function init(args: Args, io: Io): number {
-  const preset = (flag(args, "--preset", [
-    "relaxed",
-    "recommended",
-    "strict",
-  ]) ?? "recommended") as PresetName;
-  const project = openProject(args);
-  const file = path.join(project.root, CONFIG_FILE);
-  if (fs.existsSync(file)) {
+  const preset = choice(args, "--preset", PRESET_NAMES) ?? "recommended";
+  try {
+    io.stdout(`Created ${createConfigFile(openProject(args).root, preset)} (preset: ${preset}).\n`);
+    return 0;
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
     io.stderr(`${CONFIG_FILE} already exists; not overwritten.\n`);
     return 2;
   }
-  fs.writeFileSync(file, configTemplate(preset), { flag: "wx" });
-  io.stdout(`Created ${file} (preset: ${preset}).\n`);
-  return 0;
 }
 
 async function hook(args: Args, io: Io): Promise<number> {

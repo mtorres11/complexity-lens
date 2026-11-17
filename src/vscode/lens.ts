@@ -1,7 +1,8 @@
-// Inline scores above functions (CodeLens) and the status bar summary.
+// Inline scores above functions (CodeLens), and the details shown when one is clicked.
 
 import * as vscode from "vscode";
 import type { Limits } from "../core/config";
+import { FUNCTION_METRICS, isOver, METRIC } from "../core/limits";
 import type { FunctionMetrics } from "../core/analyze";
 import type { Project } from "../core/project";
 
@@ -14,17 +15,11 @@ export const LANGUAGES = [
 
 const cfg = () => vscode.workspace.getConfiguration("complexityLens");
 
-function label(
-  fn: FunctionMetrics,
-  limits: Limits,
-): string {
-  const over = (v: number, l: number | null) =>
-    l !== null && v > l ? " ⚠" : "";
-  const parts = [
-    `complexity ${fn.cognitiveComplexity}${over(fn.cognitiveComplexity, limits.cognitiveComplexity)}`,
-    `${fn.functionLines} lines${over(fn.functionLines, limits.functionLines)}`,
-    `nesting ${fn.nestingDepth}${over(fn.nestingDepth, limits.nestingDepth)}`,
-  ];
+/** The metrics shown inline, e.g. "cognitive 12 · lines 40 ⚠ · nesting 3". */
+const INLINE = [METRIC.cognitiveComplexity, METRIC.functionLines, METRIC.nestingDepth];
+
+function label(fn: FunctionMetrics, limits: Limits): string {
+  const parts = INLINE.map((m) => `${m.short} ${fn[m.key]}${isOver(fn[m.key], limits[m.key]) ? " ⚠" : ""}`);
   if (fn.allowReason !== undefined) parts.push("accepted");
   return parts.join(" · ");
 }
@@ -61,28 +56,8 @@ export class ComplexityCodeLens implements vscode.CodeLensProvider {
   }
 }
 
-export function explain(
-  fn: FunctionMetrics,
-  limits: Limits,
-): void {
-  const row = (name: string, v: number, l: number | null) =>
-    `${name}: ${v}${l === null ? "" : ` (limit ${l})`}`;
-  vscode.window.showInformationMessage(`${fn.key}`, {
-    modal: true,
-    detail: [
-      row(
-        "Cognitive complexity",
-        fn.cognitiveComplexity,
-        limits.cognitiveComplexity,
-      ),
-      row("Lines", fn.functionLines, limits.functionLines),
-      row("Nesting depth", fn.nestingDepth, limits.nestingDepth),
-      row("Parameters", fn.parameters, limits.parameters),
-      fn.allowReason !== undefined
-        ? `Accepted by comment${fn.allowReason ? `: ${fn.allowReason}` : ""}`
-        : "",
-    ]
-      .filter(Boolean)
-      .join("\n"),
-  });
+export function explain(fn: FunctionMetrics, limits: Limits): void {
+  const rows = FUNCTION_METRICS.map((m) => `${m.title}: ${fn[m.key]}${limits[m.key] === null ? "" : ` (limit ${limits[m.key]})`}`);
+  if (fn.allowReason !== undefined) rows.push(`Accepted by comment${fn.allowReason ? `: ${fn.allowReason}` : ""}`);
+  vscode.window.showInformationMessage(fn.key, { modal: true, detail: rows.join("\n") });
 }

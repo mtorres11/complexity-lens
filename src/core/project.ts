@@ -21,6 +21,7 @@ import { Churn, parseChurn } from "./churn";
 import { buildDependents, DependentsIndex } from "./dependents";
 import { matchesAny, normalizePath } from "./glob";
 import { DiskCache } from "./diskCache";
+import { walk } from "../node/walk";
 
 export const CONFIG_FILE = "complexity-lens.json";
 const MAX_CONFIG_BYTES = 256 * 1024;
@@ -67,18 +68,28 @@ export class Project {
     return t;
   }
 
-  /** On-disk cache in the git directory; memory only when git is off or this is not a repository. */
-  private get disk(): DiskCache {
-    if (!this.diskCache) {
-      let dir: string | undefined;
-      try {
-        dir = this.options.useGit ? path.join(git.gitDir(this.root), "complexity-lens") : undefined;
-      } catch {
-        dir = undefined;
-      }
-      this.diskCache = new DiskCache(dir);
+  /** Folder for Complexity Lens's own files (.git/complexity-lens), or undefined when git is off or this is not a repository. */
+  stateDir(): string | undefined {
+    if (!this.options.useGit) return undefined;
+    try {
+      return path.join(git.gitDir(this.root), "complexity-lens");
+    } catch {
+      return undefined;
     }
+  }
+
+  /** On-disk cache in the state folder; memory only without one. */
+  private get disk(): DiskCache {
+    this.diskCache ??= new DiskCache(this.stateDir());
     return this.diskCache;
+  }
+
+  /**
+   * The ref to compare with: "HEAD" for the last commit (or a ref that isn't safe), otherwise
+   * the commit where this branch forked from `compare` (what a pull request contains).
+   */
+  baseRefFor(compare: string): string {
+    return compare === "HEAD" || !git.isSafeRef(compare) ? "HEAD" : git.mergeBase(this.root, compare);
   }
 
   /** Writes the on-disk cache now (it is also saved shortly after changes and when the process exits). */
@@ -365,28 +376,4 @@ export function loadConfig(root: string): LoadResult {
     r.errors.push(`${CONFIG_FILE}: ${(e as Error).message}`);
     return r;
   }
-}
-
-/** Fallback file listing when git is unavailable: skips dot folders and node_modules. */
-function readDir(root: string, dir: string): fs.Dirent[] {
-  try {
-    return fs.readdirSync(path.join(root, dir), { withFileTypes: true });
-  } catch {
-    return [];
-  }
-}
-
-function walk(root: string, max: number): string[] {
-  const out: string[] = [];
-  const stack = [""];
-  while (stack.length && out.length < max) {
-    const dir = stack.pop() as string;
-    const entries = readDir(root, dir).filter((e) => !e.name.startsWith(".") && e.name !== "node_modules");
-    for (const e of entries) {
-      const rel = dir ? `${dir}/${e.name}` : e.name;
-      if (e.isDirectory()) stack.push(rel);
-      else if (e.isFile()) out.push(rel);
-    }
-  }
-  return out;
 }

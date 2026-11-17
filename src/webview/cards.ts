@@ -1,40 +1,21 @@
 // The Report card: verdict, the 🔍 deep-analysis button, and seven metric boxes.
 
 import type { FileSummary, Item } from "../core/insights";
-import { badge, box, fmtTokens, h, link } from "./dom";
-import { fixFile, openFile, state, toggle } from "./state";
-
-const lim = (l: number | null, label = "limit") =>
-  l === null ? "" : `, ${label} ${l}`;
+import { METRIC } from "../core/limits";
+import { badge, box, h, link } from "./dom";
+import { metricBox } from "./metrics";
+import { fixCommits, fixFile, openFile, state, toggle } from "./state";
 
 function metricGrid(r: FileSummary): HTMLElement {
   const L = r.limits;
-  const fix = state.update?.fixCommits ?? 6;
-  const worst = r.worstFunction ? ` (${r.worstFunction})` : "";
+  const fix = fixCommits();
+  const imports = L.imports === null ? "" : `, Ce limit ${L.imports}`;
   return h(
     "div",
     { class: "grid" },
-    box({
-      label: "Cognitive",
-      text: `${r.cognitive}`,
-      value: r.cognitive,
-      limit: L.cognitiveComplexity,
-      title: `Hardest-to-follow function${worst}${lim(L.cognitiveComplexity)}`,
-    }),
-    box({
-      label: "Cyclomatic",
-      text: `${r.cyclomatic}`,
-      value: r.cyclomatic,
-      limit: L.cyclomaticComplexity,
-      title: `Most paths through one function${lim(L.cyclomaticComplexity)}`,
-    }),
-    box({
-      label: "Nesting",
-      text: `${r.nesting}`,
-      value: r.nesting,
-      limit: L.nestingDepth,
-      title: `Deepest if/loop/try nesting${lim(L.nestingDepth)}`,
-    }),
+    metricBox(METRIC.cognitiveComplexity, r.cognitiveComplexity, L.cognitiveComplexity, r.worstFunction ? ` (${r.worstFunction})` : ""),
+    metricBox(METRIC.cyclomaticComplexity, r.cyclomaticComplexity, L.cyclomaticComplexity),
+    metricBox(METRIC.nestingDepth, r.nestingDepth, L.nestingDepth),
     box({
       label: "Churn",
       text: `${r.churn.commits}×`,
@@ -47,23 +28,10 @@ function metricGrid(r: FileSummary): HTMLElement {
       text: `Ca ${r.coupling.ca}·Ce ${r.coupling.ce}`,
       value: r.coupling.ce,
       limit: L.imports,
-      title: `Ca ${r.coupling.ca}: files that import it · Ce ${r.coupling.ce}: modules it imports${lim(L.imports, "Ce limit")} · instability ${r.coupling.instability}`,
+      title: `Ca ${r.coupling.ca}: files that import it · Ce ${r.coupling.ce}: modules it imports${imports} · instability ${r.coupling.instability}`,
     }),
-    box({
-      label: "Cohesion",
-      text: r.lcom ? `LCOM ${r.lcom}` : "–",
-      value: r.lcom,
-      limit: L.lcom,
-      title: `Unrelated groups of code in the file or a class (1 = cohesive)${lim(L.lcom)}`,
-    }),
-    box({
-      label: "Context load",
-      text: `≈${fmtTokens(r.contextTokens)} tok`,
-      value: r.contextTokens,
-      limit: L.contextTokens,
-      title: `Estimated tokens an AI reads to work on it (file + imports)${lim(L.contextTokens)}`,
-      wide: true,
-    }),
+    metricBox(METRIC.lcom, r.lcom, L.lcom),
+    metricBox(METRIC.contextTokens, r.contextTokens, L.contextTokens),
   );
 }
 
@@ -89,18 +57,18 @@ function delta(r: FileSummary): HTMLElement | null {
   const before = r.cognitiveBefore;
   if (
     before === undefined ||
-    before === r.cognitive ||
+    before === r.cognitiveComplexity ||
     state.update?.scope !== "changed"
   )
     return null;
-  const up = r.cognitive > before;
+  const up = r.cognitiveComplexity > before;
   return h(
     "span",
     {
       class: `delta ${up ? "up" : "down"}`,
       title: "Hardest function since the last commit",
     },
-    `${up ? "▲" : "▼"} ${before} → ${r.cognitive}`,
+    `${up ? "▲" : "▼"} ${before} → ${r.cognitiveComplexity}`,
   );
 }
 

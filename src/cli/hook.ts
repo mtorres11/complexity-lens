@@ -53,8 +53,9 @@ const sessionId = (input: HookInput) =>
     : "default";
 
 function stateFile(project: Project, id: string): string | undefined {
+  const dir = project.stateDir();
+  if (!dir) return undefined;
   try {
-    const dir = path.join(git.gitDir(project.root), "complexity-lens");
     fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
     return path.join(
       dir,

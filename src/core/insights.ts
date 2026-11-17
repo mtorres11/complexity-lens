@@ -7,7 +7,8 @@ import { Churn, emptyChurn } from "./churn";
 import type { FileSettings, Limits } from "./config";
 import { ContextLoad, contextTokensOf } from "./context";
 import { Coupling, coupling, DependentsIndex } from "./dependents";
-import { describe, evaluateFile, Finding, importsDominateHint, isProblem, judgedLcom } from "./evaluate";
+import { describe, evaluateFile, Finding, importsDominateHint, isProblem } from "./evaluate";
+import { functionOverLimits, FunctionValues, judgedLcom } from "./limits";
 import type { Project } from "./project";
 import { decide, Decision } from "./verdict";
 
@@ -18,16 +19,20 @@ export interface Item {
   fn?: string;
 }
 
-export interface FileSummary extends Decision {
-  path: string;
-  cognitive: number;
-  cyclomatic: number;
-  nesting: number;
-  worstFunction?: string;
-  cognitiveBefore?: number;
-  lines: number;
+/** File values shown on cards and screens: the worst function values, judged LCOM and context load. */
+export interface FileValues {
+  cognitiveComplexity: number;
+  cyclomaticComplexity: number;
+  nestingDepth: number;
   lcom: number;
   contextTokens: number;
+}
+
+export interface FileSummary extends Decision, FileValues {
+  path: string;
+  worstFunction?: string;
+  cognitiveBefore?: number;
+  fileLines: number;
   churn: Churn;
   coupling: Coupling;
   limits: Limits;
@@ -37,22 +42,11 @@ export interface FileSummary extends Decision {
   notes: Item[];
 }
 
-export interface FunctionDetail {
+export interface FunctionDetail extends FunctionValues {
   key: string;
   line: number;
   endLine: number;
-  cognitive: number;
-  cyclomatic: number;
-  nesting: number;
-  lines: number;
-  parameters: number;
-  before?: {
-    cognitive: number;
-    cyclomatic: number;
-    nesting: number;
-    lines: number;
-    parameters: number;
-  };
+  before?: FunctionValues;
   allowReason?: string;
   over: boolean;
   /** Places adding to the cognitive score, in source order. */
@@ -64,13 +58,7 @@ export interface FunctionDetail {
 
 export interface FileDetail extends FileSummary {
   fileTokens: number;
-  before?: {
-    cognitive: number;
-    cyclomatic: number;
-    nesting: number;
-    lcom: number;
-    contextTokens: number;
-  };
+  before?: FileValues;
   context: {
     own: number;
     fromImports: number;
@@ -98,10 +86,23 @@ export interface InsightContext {
   changed?: Set<string>;
 }
 
-const worstOf = (
-  m: FileMetrics,
-  k: "cognitiveComplexity" | "cyclomaticComplexity" | "nestingDepth",
-) => Math.max(0, ...m.functions.map((f) => f[k]));
+const worstOf = (m: FileMetrics, k: keyof FunctionValues) => Math.max(0, ...m.functions.map((f) => f[k]));
+
+const fileValues = (m: FileMetrics, s: FileSettings, context: ContextLoad): FileValues => ({
+  cognitiveComplexity: worstOf(m, "cognitiveComplexity"),
+  cyclomaticComplexity: worstOf(m, "cyclomaticComplexity"),
+  nestingDepth: worstOf(m, "nestingDepth"),
+  lcom: judgedLcom(m, s),
+  contextTokens: contextTokensOf(m, context),
+});
+
+const functionValues = (f: FunctionMetrics): FunctionValues => ({
+  cognitiveComplexity: f.cognitiveComplexity,
+  cyclomaticComplexity: f.cyclomaticComplexity,
+  functionLines: f.functionLines,
+  nestingDepth: f.nestingDepth,
+  parameters: f.parameters,
+});
 const toItem = (f: Finding): Item => ({
   line: f.line,
   text: describe(f),
@@ -140,14 +141,10 @@ function summaryOf(rel: string, x: Measured, project: Project, ctx: InsightConte
   return {
     path: rel,
     ...decide({ metrics: m, findings, churn, ca, context, config: project.config, settings: s }),
-    cognitive: worstOf(m, "cognitiveComplexity"),
-    cyclomatic: worstOf(m, "cyclomaticComplexity"),
-    nesting: worstOf(m, "nestingDepth"),
+    ...fileValues(m, s, context),
     worstFunction: worst?.key,
     cognitiveBefore: base ? worstOf(base, "cognitiveComplexity") : undefined,
-    lines: m.fileLines,
-    lcom: judgedLcom(m, s),
-    contextTokens: contextTokensOf(m, context),
+    fileLines: m.fileLines,
     churn,
     coupling: coupling(ca, m.imports),
     limits: s.limits,
@@ -162,57 +159,27 @@ export function summarize(project: Project, rel: string, ctx: InsightContext): F
   return x && summaryOf(rel, x, project, ctx);
 }
 
+/** Calls between functions of the same file, matched by bare name ("helper" or "this.helper"). */
+const callsTo = (caller: FunctionMetrics, callee: FunctionMetrics) =>
+  caller !== callee && caller.calls.some((c) => c === callee.simpleName || c === `this.${callee.simpleName}`);
+
 function functionDetail(
   fn: FunctionMetrics,
   all: FunctionMetrics[],
   prev: FunctionMetrics | undefined,
   s: FileSettings,
 ): FunctionDetail {
-  const L = s.limits;
-  const over = (v: number, l: number | null) => l !== null && v > l;
-  const simple = (key: string) => key.replace(/^.*\./, "").replace(/#\d+$/, "");
-  const name = simple(fn.key);
-  const calledBy = all
-    .filter(
-      (o) =>
-        o !== fn && o.calls.some((c) => c === name || c === `this.${name}`),
-    )
-    .map((o) => o.key);
-  const calls = all
-    .filter(
-      (o) =>
-        o !== fn &&
-        fn.calls.some(
-          (c) => c === simple(o.key) || c === `this.${simple(o.key)}`,
-        ),
-    )
-    .map((o) => o.key);
   return {
     key: fn.key,
     line: fn.line,
     endLine: fn.endLine,
-    cognitive: fn.cognitiveComplexity,
-    cyclomatic: fn.cyclomaticComplexity,
-    nesting: fn.nestingDepth,
-    lines: fn.functionLines,
-    parameters: fn.parameters,
-    before: prev && {
-      cognitive: prev.cognitiveComplexity,
-      cyclomatic: prev.cyclomaticComplexity,
-      nesting: prev.nestingDepth,
-      lines: prev.functionLines,
-      parameters: prev.parameters,
-    },
+    ...functionValues(fn),
+    before: prev && functionValues(prev),
     allowReason: fn.allowReason,
-    over:
-      over(fn.cognitiveComplexity, L.cognitiveComplexity) ||
-      over(fn.cyclomaticComplexity, L.cyclomaticComplexity) ||
-      over(fn.nestingDepth, L.nestingDepth) ||
-      over(fn.functionLines, L.functionLines) ||
-      over(fn.parameters, L.parameters),
+    over: functionOverLimits(fn, s.limits).length > 0,
     hotspots: fn.increments,
-    calls,
-    calledBy,
+    calls: all.filter((o) => callsTo(fn, o)).map((o) => o.key),
+    calledBy: all.filter((o) => callsTo(o, fn)).map((o) => o.key),
     advice: functionAdvice(fn, s),
   };
 }
@@ -234,18 +201,12 @@ export function detail(
     functionDetail(f, m.functions, before.get(f.key), s),
   );
   functions.sort(
-    (a, b) => Number(b.over) - Number(a.over) || b.cognitive - a.cognitive,
+    (a, b) => Number(b.over) - Number(a.over) || b.cognitiveComplexity - a.cognitiveComplexity,
   );
   return {
     ...summary,
     fileTokens: m.fileTokens,
-    before: base && {
-      cognitive: worstOf(base, "cognitiveComplexity"),
-      cyclomatic: worstOf(base, "cyclomaticComplexity"),
-      nesting: worstOf(base, "nestingDepth"),
-      lcom: judgedLcom(base, s),
-      contextTokens: contextTokensOf(base, context),
-    },
+    before: base && fileValues(base, s, context),
     context: {
       own: context.own,
       fromImports: context.fromImports,

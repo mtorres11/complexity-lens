@@ -2,12 +2,17 @@
 
 import type { FileDetail, FileSummary } from "../core/insights";
 
-export type Tab = "report" | "change" | "todo";
-export type Scope = "changed" | "repo" | "current";
-export type Sort = "payoff" | "aiCost" | "complexity" | "churn" | "name";
-export type ActionKind =
-  "fixPrompt" | "ticket" | "chore" | "accept" | "ignore" | "unignore";
-export type BatchKind = "fixAll" | "prSummary" | "tickets" | "choreList";
+export const TABS = ["report", "change", "todo"] as const;
+export const SCOPES = ["changed", "repo", "current"] as const;
+export const SORTS = ["payoff", "aiCost", "complexity", "churn", "name"] as const;
+export const ACTIONS = ["fixPrompt", "ticket", "chore", "accept", "ignore", "unignore"] as const;
+export const BATCHES = ["fixAll", "prSummary", "tickets", "choreList"] as const;
+
+export type Tab = (typeof TABS)[number];
+export type Scope = (typeof SCOPES)[number];
+export type Sort = (typeof SORTS)[number];
+export type ActionKind = (typeof ACTIONS)[number];
+export type BatchKind = (typeof BATCHES)[number];
 
 export interface ViewData {
   /** Report: files in the chosen scope. */
@@ -62,27 +67,3 @@ export type FromWebview =
   | { type: "openConfig" }
   | { type: "installHook" }
   | { type: "openRepo" };
-
-export const TABS: Tab[] = ["report", "change", "todo"];
-export const SCOPES: Scope[] = ["changed", "repo", "current"];
-export const SORTS: Sort[] = [
-  "payoff",
-  "aiCost",
-  "complexity",
-  "churn",
-  "name",
-];
-export const ACTIONS: ActionKind[] = [
-  "fixPrompt",
-  "ticket",
-  "chore",
-  "accept",
-  "ignore",
-  "unignore",
-];
-export const BATCHES: BatchKind[] = [
-  "fixAll",
-  "prSummary",
-  "tickets",
-  "choreList",
-];

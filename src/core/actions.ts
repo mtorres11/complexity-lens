@@ -3,42 +3,20 @@
 
 import type { FileDetail, FileSummary, FunctionDetail } from "./insights";
 import { allowCommentText } from "./config";
-import { METRIC_LABEL } from "./evaluate";
+import { formatTokens as k } from "./format";
 import { CHORE_SUFFIX, designNoteLines, guidance, sentence } from "./guidance";
-
-const k = (n: number) => (n >= 1000 ? `${Math.round(n / 100) / 10}k` : `${n}`);
+import { FUNCTION_METRICS, functionMetricsText, METRIC } from "./limits";
 
 const RULES =
   "Rules: don't change behaviour; keep all existing tests passing; no new dependencies; " +
   "every function you touch must end within the limits below.";
 
 function limitsLine(d: FileSummary): string {
-  const L = d.limits;
-  const parts = [
-    L.cognitiveComplexity !== null
-      ? `cognitive ≤ ${L.cognitiveComplexity}`
-      : "",
-    L.cyclomaticComplexity !== null
-      ? `cyclomatic ≤ ${L.cyclomaticComplexity}`
-      : "",
-    L.nestingDepth !== null ? `nesting ≤ ${L.nestingDepth}` : "",
-    L.functionLines !== null ? `≤ ${L.functionLines} lines per function` : "",
-    L.parameters !== null ? `≤ ${L.parameters} parameters` : "",
-  ];
-  return `Limits: ${parts.filter(Boolean).join(", ")}.`;
+  const parts = FUNCTION_METRICS.flatMap((m) => (d.limits[m.key] === null ? [] : [`${m.short} ≤ ${d.limits[m.key]}`]));
+  return `Limits: ${parts.join(", ")}.`;
 }
 
-function functionProblem(f: FunctionDetail, d: FileSummary): string {
-  const L = d.limits;
-  const m = [
-    `cognitive ${f.cognitive}${L.cognitiveComplexity !== null ? ` (limit ${L.cognitiveComplexity})` : ""}`,
-    `cyclomatic ${f.cyclomatic}${L.cyclomaticComplexity !== null ? ` (limit ${L.cyclomaticComplexity})` : ""}`,
-    `nesting ${f.nesting}${L.nestingDepth !== null ? ` (limit ${L.nestingDepth})` : ""}`,
-    `${f.lines} lines`,
-    `${f.parameters} parameter${f.parameters === 1 ? "" : "s"}`,
-  ];
-  return m.join(", ");
-}
+const functionProblem = (f: FunctionDetail, d: FileSummary): string => functionMetricsText(f, d.limits);
 
 const hotLines = (f: FunctionDetail) =>
   [...f.hotspots]
@@ -82,7 +60,7 @@ export function fileFixPrompt(d: FileDetail, extra: readonly string[] = []): str
     `Refactor ${d.path} to make it easier to work on.`,
     `Why: ${d.why}`,
     d.overLimits.length
-      ? `Over the limits: ${d.overLimits.map((m) => METRIC_LABEL[m]).join(", ")}.`
+      ? `Over the limits: ${d.overLimits.map((m) => METRIC[m].label).join(", ")}.`
       : "",
     bad.length
       ? `Functions to simplify:\n${bad.map((f) => `- ${f.key} (line ${f.line}): ${functionProblem(f, d)}. ${f.advice.join(" ")}`).join("\n")}`
@@ -99,9 +77,9 @@ export function fileFixPrompt(d: FileDetail, extra: readonly string[] = []): str
 }
 
 const size = (d: FileDetail) =>
-  d.lines > 800 || d.functions.filter((f) => f.over).length > 4
+  d.fileLines > 800 || d.functions.filter((f) => f.over).length > 4
     ? "L"
-    : d.lines > 300 || d.split
+    : d.fileLines > 300 || d.split
       ? "M"
       : "S";
 
@@ -109,7 +87,7 @@ function problemLines(d: FileDetail): string[] {
   const lines = [
     `- Changed ${d.churn.commits}× recently by ${d.churn.authors} author(s); ${d.coupling.ca} file(s) depend on it.`,
     `- Agents read about ${k(d.contextTokens)} tokens per edit (file ${k(d.context.own)} + imports ${k(d.context.fromImports)}).`,
-    `- Hardest function: ${d.worstFunction ?? "-"} (cognitive ${d.cognitive}, cyclomatic ${d.cyclomatic}, nesting ${d.nesting}).`,
+    `- Hardest function: ${d.worstFunction ?? "-"} (cognitive ${d.cognitiveComplexity}, cyclomatic ${d.cyclomaticComplexity}, nesting ${d.nestingDepth}).`,
   ];
   if (d.lcom > 1) lines.push(`- Cohesion LCOM ${d.lcom}: the file does ${d.lcom} unrelated jobs.`);
   return lines;

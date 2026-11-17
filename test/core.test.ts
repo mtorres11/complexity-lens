@@ -120,6 +120,7 @@ const fileWith = (complexity: number): FileMetrics => ({
     {
       key: "f",
       name: "f",
+      simpleName: "f",
       line: 1,
       endLine: 5,
       cognitiveComplexity: complexity,

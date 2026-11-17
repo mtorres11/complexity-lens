@@ -74,6 +74,7 @@ test("change: compared with the last commit or the merge base of a branch, probl
   const branch = await b.changeItems("main", progress);
   assert.deepEqual(branch.map((r) => r.path), ["ok.ts", "leave.ts"]);
   assert.ok(branch[0].problems.length > 0);
+  assert.deepEqual((await b.changeItems("-bad", progress)).map((r) => r.path), ["leave.ts"], "an unsafe ref falls back to HEAD");
 });
 
 test("detail and cancellation", async () => {

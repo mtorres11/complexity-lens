@@ -2,23 +2,20 @@
 // as untrusted data: invalid values are reported and fall back to the preset.
 
 import {
+  AFTER_EDIT_MODES,
   AllowComment,
+  CI_MODES,
   Config,
   defaultConfig,
   HookSettings,
   LIMIT_KEYS,
   Limits,
   LoadResult,
+  ON_FINISH_MODES,
   Override,
+  POLICIES,
+  PRESET_NAMES,
 } from "./config";
-
-const ENUMS = {
-  preset: ["relaxed", "recommended", "strict"],
-  policy: ["ratchet", "absolute"],
-  afterEdit: ["off", "inform", "nudge"],
-  onFinish: ["off", "inform", "block"],
-  ci: ["off", "warn", "failOnRegression", "failOverLimit"],
-} as const;
 
 const MARKER_RE = /^[a-z0-9][a-z0-9-]{2,39}$/;
 const MAX_GLOBS = 200;
@@ -117,8 +114,8 @@ class Validator {
     }
     this.unknownKeys(v, ["afterEdit", "onFinish", "maxRetries"], `${path}.`);
     return strip({
-      afterEdit: this.enumOf(v.afterEdit, ENUMS.afterEdit, `${path}.afterEdit`),
-      onFinish: this.enumOf(v.onFinish, ENUMS.onFinish, `${path}.onFinish`),
+      afterEdit: this.enumOf(v.afterEdit, AFTER_EDIT_MODES, `${path}.afterEdit`),
+      onFinish: this.enumOf(v.onFinish, ON_FINISH_MODES, `${path}.onFinish`),
       maxRetries: this.int(v.maxRetries, `${path}.maxRetries`, 0, 10),
     });
   }
@@ -152,7 +149,6 @@ function strip<T extends object>(o: T): Partial<T> {
   ) as Partial<T>;
 }
 
-/** Validates raw JSON and merges it over its preset. Invalid values fall back to the preset. */
 const TOP_KEYS = ["preset", "include", "exclude", "limits", "policy", "allowComment", "hook", "ci", "tokens", "hotspots", "verdicts", "overrides"];
 
 /** Runs `apply` on an optional nested object, reporting a wrong type or unknown keys. */
@@ -167,14 +163,14 @@ function applyCore(v: Validator, raw: Obj, cfg: Config): void {
   cfg.include = v.globs(raw.include, "include") ?? cfg.include;
   cfg.exclude = v.globs(raw.exclude, "exclude") ?? cfg.exclude;
   Object.assign(cfg.limits, v.limits(raw.limits, "limits"));
-  cfg.policy = v.enumOf(raw.policy, ENUMS.policy, "policy") ?? cfg.policy;
+  cfg.policy = v.enumOf(raw.policy, POLICIES, "policy") ?? cfg.policy;
   Object.assign(cfg.allowComment, v.allowComment(raw.allowComment, "allowComment"));
   Object.assign(cfg.hook, v.hook(raw.hook, "hook"));
 }
 
 function applySmallSections(v: Validator, raw: Obj, cfg: Config): void {
   section(v, raw.ci, "ci", ["mode"], (o) => {
-    cfg.ci.mode = v.enumOf(o.mode, ENUMS.ci, "ci.mode") ?? cfg.ci.mode;
+    cfg.ci.mode = v.enumOf(o.mode, CI_MODES, "ci.mode") ?? cfg.ci.mode;
   });
   section(v, raw.tokens, "tokens", ["includeImports", "ignoreImports"], (o) => {
     cfg.tokens.includeImports = v.int(o.includeImports, "tokens.includeImports", 0, 3) ?? cfg.tokens.includeImports;
@@ -197,7 +193,7 @@ function parseOverride(v: Validator, o: unknown, p: string): Override | undefine
   return strip({
     files,
     limits: v.limits(o.limits, `${p}.limits`),
-    policy: v.enumOf(o.policy, ENUMS.policy, `${p}.policy`),
+    policy: v.enumOf(o.policy, POLICIES, `${p}.policy`),
     hook: v.hook(o.hook, `${p}.hook`),
     allowComment: v.allowComment(o.allowComment, `${p}.allowComment`),
   }) as Override;
@@ -220,7 +216,7 @@ export function resolveConfig(raw: unknown): LoadResult {
   if (!isObj(raw)) return { config: defaultConfig(), errors: ["complexity-lens.json must contain a JSON object"], warnings: [] };
   const v = new Validator();
   v.unknownKeys(raw, TOP_KEYS, "");
-  const cfg = defaultConfig(v.enumOf(raw.preset, ENUMS.preset, "preset") ?? "recommended");
+  const cfg = defaultConfig(v.enumOf(raw.preset, PRESET_NAMES, "preset") ?? "recommended");
   applyCore(v, raw, cfg);
   applySmallSections(v, raw, cfg);
   applyOverrides(v, raw, cfg);

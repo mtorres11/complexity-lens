@@ -32,7 +32,7 @@ test("summary of a changed file: problems against the last commit, baseline and 
   assert.equal(s.verdict, "FIX");
   assert.equal(s.reason, "your change made it worse");
   assert.equal(s.cognitiveBefore, 0);
-  assert.ok(s.cognitive > 15);
+  assert.ok(s.cognitiveComplexity > 15);
   assert.equal(s.worstFunction, "f");
   assert.equal(s.coupling.ca, 1, "src/b.ts imports it");
   assert.ok(s.problems.some((x) => x.status === "regression" && x.fn === "f"));
@@ -47,7 +47,7 @@ test("unchanged files are compared with themselves (fast path): no regressions, 
   const p = new Project(root);
   const s = summarize(p, "src/a.ts", ctx(p, []))!;
   assert.equal(s.problems.length, 0);
-  assert.equal(s.cognitiveBefore, s.cognitive);
+  assert.equal(s.cognitiveBefore, s.cognitiveComplexity);
   assert.notEqual(s.verdict, "OK", "still over the limits");
   assert.equal(summarize(p, "src/missing.ts", ctx(p, [])), undefined);
 });
@@ -64,13 +64,13 @@ test("detail: functions worst first, over flags, calls / called by, before value
   assert.deepEqual(fn("Parser.parse").calls.sort(), ["Parser.step", "helper", "helper#2"]);
   assert.deepEqual(fn("Parser.step").calledBy, ["Parser.parse"]);
   assert.deepEqual(fn("helper").calledBy, ["Parser.parse"]);
-  assert.ok(fn("Parser.step").before!.nesting < fn("Parser.step").nesting);
+  assert.ok(fn("Parser.step").before!.nestingDepth < fn("Parser.step").nestingDepth);
   assert.equal(fn("Parser.parse").before?.parameters, 2);
   assert.deepEqual(d.internalImports, ["src/u.ts"]);
   assert.equal(d.externalImports, 1);
   assert.deepEqual(d.dependents, ["src/c.ts"]);
   assert.equal(d.churn.commits, 2);
-  assert.ok(d.before && d.before.nesting < d.nesting);
+  assert.ok(d.before && d.before.nestingDepth < d.nestingDepth);
   assert.equal(d.before?.contextTokens, d.context.fromImports + p.baselineMetrics("src/m.ts")!.fileTokens);
   assert.equal(d.context.importsAdvice, undefined);
   assert.equal(detail(p, "src/missing.ts", ctx(p)), undefined);

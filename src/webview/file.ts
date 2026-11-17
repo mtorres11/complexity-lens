@@ -1,91 +1,28 @@
 // Deep analysis of one file (from the 🔍 button).
 
-import type { FileDetail, FunctionDetail } from "../core/insights";
-import {
-  ago,
-  badge,
-  bar,
-  button,
-  fmtTokens,
-  h,
-  link,
-  section,
-  send,
-  sparkline,
-} from "./dom";
+import { capitalize, formatTokens } from "../core/format";
+import type { FileDetail, FileValues, FunctionDetail } from "../core/insights";
+import { functionMetricsText, METRIC } from "../core/limits";
+import { actionButton } from "./actions";
+import { ago, badge, h, link, section, sparkline } from "./dom";
+import { metricRow } from "./metrics";
 import { openFile, openFunction } from "./state";
 
-type Row = {
-  label: string;
-  now: number | string;
-  before?: number;
-  limit: number | null;
-  value?: number;
-};
-
-function metricRow(r: Row): HTMLElement {
-  const over =
-    r.limit !== null && typeof r.value === "number" && r.value > r.limit;
-  return h(
-    "div",
-    { class: "mrow" },
-    h("span", { class: "mlabel" }, r.label),
-    h("span", { class: "mnum" }, `${r.now}`),
-    h(
-      "span",
-      { class: "mnum muted" },
-      r.before === undefined ? "–" : `${r.before}`,
-    ),
-    h("span", { class: "mnum muted" }, r.limit === null ? "–" : `${r.limit}`),
-    typeof r.value === "number" ? bar(r.value, r.limit) : h("span"),
-    h("span", { class: over ? "bad-text" : "ok-text" }, over ? "✖" : "✓"),
-  );
-}
+/** File metrics on the deep-analysis screen; function metrics show the worst function. */
+const SHOWN = [METRIC.cognitiveComplexity, METRIC.cyclomaticComplexity, METRIC.nestingDepth, METRIC.lcom, METRIC.contextTokens];
 
 function metrics(d: FileDetail): HTMLElement {
-  const L = d.limits;
-  const b = d.before;
   return section(
     "METRICS · now · last commit · limit",
-    metricRow({
-      label: "Cognitive (worst)",
-      now: d.cognitive,
-      before: b?.cognitive,
-      limit: L.cognitiveComplexity,
-      value: d.cognitive,
-    }),
-    metricRow({
-      label: "Cyclomatic (worst)",
-      now: d.cyclomatic,
-      before: b?.cyclomatic,
-      limit: L.cyclomaticComplexity,
-      value: d.cyclomatic,
-    }),
-    metricRow({
-      label: "Nesting (worst)",
-      now: d.nesting,
-      before: b?.nesting,
-      limit: L.nestingDepth,
-      value: d.nesting,
-    }),
-    metricRow({
-      label: "Cohesion (LCOM)",
-      now: d.lcom || "–",
-      before: b?.lcom,
-      limit: L.lcom,
-      value: d.lcom,
-    }),
-    metricRow({
-      label: "Context load",
-      now: fmtTokens(d.contextTokens),
-      before: b?.contextTokens,
-      limit: L.contextTokens,
-      value: d.contextTokens,
+    ...SHOWN.map((m) => {
+      const key: keyof FileValues = m.key;
+      const label = m.scope === "function" ? `${capitalize(m.short)} (worst)` : m.title;
+      return metricRow(label, m, { now: d[key], before: d.before?.[key], limit: d.limits[key] });
     }),
     h(
       "div",
       { class: "muted small" },
-      `= file ≈${fmtTokens(d.context.own)} + imports ≈${fmtTokens(d.context.fromImports)} · ${d.lines} lines`,
+      `= file ≈${formatTokens(d.context.own)} + imports ≈${formatTokens(d.context.fromImports)} · ${d.fileLines} lines`,
     ),
     d.context.ignored.length
       ? h(
@@ -169,7 +106,7 @@ function fnRow(d: FileDetail, f: FunctionDetail): HTMLElement {
     h(
       "span",
       { class: "muted small" },
-      `cog ${f.cognitive} · cyc ${f.cyclomatic} · ${f.lines} ln · nest ${f.nesting}`,
+      functionMetricsText(f, undefined, " · "),
     ),
     h("span", { class: "chev" }, "▸"),
   );
@@ -198,7 +135,7 @@ function functionsSection(d: FileDetail): HTMLElement {
 function splitSection(d: FileDetail): HTMLElement | null {
   if (!d.split) return null;
   return section(
-    `SUGGESTED SPLIT (saves ≈${fmtTokens(d.split.savesTokens)} tokens per edit)`,
+    `SUGGESTED SPLIT (saves ≈${formatTokens(d.split.savesTokens)} tokens per edit)`,
     ...d.split.parts.map((p) =>
       h(
         "div",
@@ -207,7 +144,7 @@ function splitSection(d: FileDetail): HTMLElement | null {
         h(
           "span",
           { class: "muted small" },
-          ` ${p.members.slice(0, 4).join(", ")}${p.members.length > 4 ? ", …" : ""} (${p.members.length}) ≈${fmtTokens(p.tokens)} tok`,
+          ` ${p.members.slice(0, 4).join(", ")}${p.members.length > 4 ? ", …" : ""} (${p.members.length}) ≈${formatTokens(p.tokens)} tok`,
         ),
       ),
     ),
@@ -220,34 +157,17 @@ function splitSection(d: FileDetail): HTMLElement | null {
 }
 
 function actionsSection(d: FileDetail): HTMLElement {
-  const fn = d.functions.find((f) => f.over)?.key;
-  const act =
-    (kind: "fixPrompt" | "ticket" | "chore" | "accept" | "ignore") => () =>
-      send({
-        type: "action",
-        kind,
-        path: d.path,
-        fn: kind === "accept" ? fn : undefined,
-      });
+  const worst = d.functions.find((f) => f.over)?.key;
   return section(
     "ACTIONS",
     h(
       "div",
       { class: "actions" },
-      button("✨ Fix with AI", act("fixPrompt"), {
-        title: "Copy a refactoring prompt for your AI agent",
-      }),
-      button("🎫 Ticket draft", act("ticket"), {
-        title: "Copy or save a ready-to-file ticket",
-      }),
-      button("🧹 Chore", act("chore")),
-      button("Accept…", act("accept"), {
-        disabled: !fn,
-        title: "Keep the worst function as is, with a reason in the code",
-      }),
-      button("Ignore", act("ignore"), {
-        title: "Hide from What to fix (on this machine)",
-      }),
+      actionButton("fixPrompt", d.path),
+      actionButton("ticket", d.path),
+      actionButton("chore", d.path),
+      actionButton("accept", d.path, worst, !worst),
+      actionButton("ignore", d.path),
     ),
   );
 }

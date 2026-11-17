@@ -9,9 +9,22 @@ import type { FileMetrics } from "./analyze";
 import type { Churn } from "./churn";
 import type { Config, FileSettings, LimitKey } from "./config";
 import { ContextLoad, contextTokensOf } from "./context";
-import { Finding, isProblem, judgedLcom } from "./evaluate";
+import { Finding, isProblem } from "./evaluate";
+import { formatTokens } from "./format";
+import { fileValue, isAllowed, isOver, METRICS } from "./limits";
 
-export type Verdict = "FIX" | "PLAN" | "LEAVE" | "OK";
+export const VERDICTS = ["FIX", "PLAN", "LEAVE", "OK"] as const;
+export type Verdict = (typeof VERDICTS)[number];
+
+/** The reason shown for each verdict, and what it means (tooltips, group headings, help). */
+export const VERDICT_TEXT: Record<Verdict, { reason: string; meaning: string }> = {
+  FIX: { reason: "hotspot: complex and changed often", meaning: "your change made it worse, or a hotspot (complex and changed often)" },
+  PLAN: { reason: "over the limits, changed sometimes", meaning: "over the limits and changed sometimes: worth a ticket" },
+  LEAVE: { reason: "complex but stable", meaning: "complex but rarely changed: not worth refactoring now" },
+  OK: { reason: "within the limits", meaning: "within the limits" },
+};
+/** The FIX reason when the current change made the file worse. */
+export const REGRESSED_REASON = "your change made it worse";
 
 export interface Decision {
   verdict: Verdict;
@@ -26,40 +39,11 @@ export interface Decision {
 
 /** Current values over their limits, ignoring functions accepted by the allow comment. */
 export function overLimits(m: FileMetrics, s: FileSettings, ctx?: ContextLoad): LimitKey[] {
-  const L = s.limits;
-  const fns = m.functions.filter(
-    (f) =>
-      f.allowReason === undefined ||
-      (s.allowComment.requireReason && !f.allowReason),
-  );
-  const worst = (
-    k:
-      | "cognitiveComplexity"
-      | "cyclomaticComplexity"
-      | "nestingDepth"
-      | "functionLines"
-      | "parameters",
-  ) => Math.max(0, ...fns.map((f) => f[k]));
-  const values: Partial<Record<LimitKey, number | undefined>> = {
-    cognitiveComplexity: worst("cognitiveComplexity"),
-    cyclomaticComplexity: worst("cyclomaticComplexity"),
-    nestingDepth: worst("nestingDepth"),
-    functionLines: worst("functionLines"),
-    parameters: worst("parameters"),
-    fileLines: m.fileLines,
-    fileTokens: m.fileTokens,
-    imports: m.imports,
-    lcom: judgedLcom(m, s),
-    contextTokens: ctx && contextTokensOf(m, ctx),
-  };
-  return (Object.keys(values) as LimitKey[]).filter((k) => {
-    const v = values[k];
-    const l = L[k];
-    return v !== undefined && l !== null && v > l;
-  });
+  const fns = m.functions.filter((f) => !isAllowed(f, s));
+  const value = (metric: (typeof METRICS)[number]): number | undefined =>
+    metric.scope === "function" ? Math.max(0, ...fns.map((f) => f[metric.key])) : fileValue(m, metric.key, s, ctx);
+  return METRICS.filter((metric) => isOver(value(metric), s.limits[metric.key])).map((metric) => metric.key);
 }
-
-const k = (n: number) => (n >= 1000 ? `${Math.round(n / 100) / 10}k` : `${n}`);
 
 function why({ metrics: m, churn, ca, context }: DecideInput, regressed: boolean): string {
   const parts: string[] = [];
@@ -73,7 +57,7 @@ function why({ metrics: m, churn, ca, context }: DecideInput, regressed: boolean
       `${ca} file${ca === 1 ? "" : "s"} depend on it, so mistakes spread.`,
     );
   if (context)
-    parts.push(`Every AI edit reads about ${k(contextTokensOf(m, context))} tokens.`);
+    parts.push(`Every AI edit reads about ${formatTokens(contextTokensOf(m, context))} tokens.`);
   const worst = [...m.functions].sort(
     (a, b) => b.cognitiveComplexity - a.cognitiveComplexity,
   )[0];
@@ -97,6 +81,13 @@ export interface DecideInput {
   settings: FileSettings;
 }
 
+function verdictOf(regressed: boolean, over: boolean, commits: number, v: Config["verdicts"]): Verdict {
+  if (regressed) return "FIX";
+  if (!over) return "OK";
+  if (commits >= v.fixCommits) return "FIX";
+  return commits >= v.planCommits ? "PLAN" : "LEAVE";
+}
+
 export function decide(input: DecideInput): Decision {
   const { metrics: m, findings, churn, ca, context, config, settings: s } = input;
   const over = overLimits(m, s, context);
@@ -109,21 +100,6 @@ export function decide(input: DecideInput): Decision {
   );
   const regressed = findings.some(isProblem);
   const base = { payoff, overLimits: over, why: why(input, regressed) };
-  if (regressed)
-    return { ...base, verdict: "FIX", reason: "your change made it worse" };
-  if (!over.length)
-    return { ...base, verdict: "OK", reason: "within the limits" };
-  if (commits >= config.verdicts.fixCommits)
-    return {
-      ...base,
-      verdict: "FIX",
-      reason: "hotspot: complex and changed often",
-    };
-  if (commits >= config.verdicts.planCommits)
-    return {
-      ...base,
-      verdict: "PLAN",
-      reason: "over the limits, changed sometimes",
-    };
-  return { ...base, verdict: "LEAVE", reason: "complex but stable" };
+  const verdict = verdictOf(regressed, over.length > 0, commits, config.verdicts);
+  return { ...base, verdict, reason: regressed ? REGRESSED_REASON : VERDICT_TEXT[verdict].reason };
 }

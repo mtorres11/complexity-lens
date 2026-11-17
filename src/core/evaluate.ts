@@ -7,6 +7,8 @@
 import type { FileMetrics, FunctionMetrics } from "./analyze";
 import type { FileSettings, LimitKey } from "./config";
 import { ContextLoad, contextTokensOf } from "./context";
+import { formatTokens } from "./format";
+import { FILE_KEYS, fileValue, FUNCTION_KEYS, isAllowed, METRIC } from "./limits";
 
 export type FindingStatus =
   /** New function or file that is over a limit. */
@@ -34,34 +36,6 @@ export interface Finding {
   hint?: string;
 }
 
-const FUNCTION_METRICS = [
-  "cognitiveComplexity",
-  "cyclomaticComplexity",
-  "functionLines",
-  "nestingDepth",
-  "parameters",
-] as const;
-const FILE_METRICS = ["fileLines", "fileTokens", "imports", "lcom", "contextTokens"] as const;
-type FileMetric = (typeof FILE_METRICS)[number];
-
-/**
- * LCOM that counts against the limit: classes always; the module only once the file is at
- * least half the line limit, so small utility files with a few unrelated helpers are fine.
- */
-export function judgedLcom(m: FileMetrics, s: FileSettings): number {
-  const classes = Math.max(0, ...m.cohesion.filter((c) => c.scope === "class").map((c) => c.lcom));
-  const big = s.limits.fileLines === null || m.fileLines * 2 >= s.limits.fileLines;
-  const mod = big ? Math.max(0, ...m.cohesion.filter((c) => c.scope === "module").map((c) => c.lcom)) : 0;
-  return Math.max(classes, mod);
-}
-
-/** Value of a file-level metric, or undefined when it can't be measured (context load without `ctx`). */
-export function fileValue(m: FileMetrics, metric: FileMetric, s: FileSettings, ctx?: ContextLoad): number | undefined {
-  if (metric === "lcom") return judgedLcom(m, s);
-  if (metric === "contextTokens") return ctx && contextTokensOf(m, ctx);
-  return m[metric];
-}
-
 export const isProblem = (f: Finding): boolean =>
   f.status === "new-over" || f.status === "regression" || f.status === "over";
 
@@ -83,18 +57,13 @@ function judge(
   return improved ? "improved" : undefined;
 }
 
-function allowed(fn: FunctionMetrics, s: FileSettings): boolean {
-  if (fn.allowReason === undefined) return false;
-  return !s.allowComment.requireReason || fn.allowReason.length > 0;
-}
-
 function functionFindings(path: string, fn: FunctionMetrics, prev: FunctionMetrics | undefined, s: FileSettings): Finding[] {
   const out: Finding[] = [];
-  for (const m of FUNCTION_METRICS) {
+  for (const m of FUNCTION_KEYS) {
     const limit = s.limits[m];
     const status = judge(fn[m], limit, prev?.[m], s.policy);
     if (!status || limit === null) continue;
-    const accepted = status !== "improved" && allowed(fn, s);
+    const accepted = status !== "improved" && isAllowed(fn, s);
     out.push({ path, fn: fn.key, line: fn.line, metric: m, value: fn[m], limit, baseline: prev?.[m], status: accepted ? "allowed" : status });
   }
   return out;
@@ -102,7 +71,7 @@ function functionFindings(path: string, fn: FunctionMetrics, prev: FunctionMetri
 
 function fileFindings(current: FileMetrics, baseline: FileMetrics | undefined, s: FileSettings, ctx?: ContextLoad): Finding[] {
   const out: Finding[] = [];
-  for (const m of FILE_METRICS) {
+  for (const m of FILE_KEYS) {
     const limit = s.limits[m];
     const value = fileValue(current, m, s, ctx);
     const before = baseline && fileValue(baseline, m, s, ctx);
@@ -127,19 +96,6 @@ export function evaluateFile(current: FileMetrics, baseline: FileMetrics | undef
   ];
 }
 
-export const METRIC_LABEL: Record<LimitKey, string> = {
-  cognitiveComplexity: "cognitive complexity",
-  cyclomaticComplexity: "cyclomatic complexity",
-  functionLines: "lines",
-  nestingDepth: "nesting depth",
-  parameters: "parameters",
-  fileLines: "file lines",
-  fileTokens: "estimated tokens",
-  imports: "imports",
-  lcom: "cohesion (LCOM, unrelated groups)",
-  contextTokens: "context load (tokens incl. imports)",
-};
-
 export const HINT: Record<LimitKey, string> = {
   cognitiveComplexity:
     "extract branches into well-named helpers, return early, or replace nested conditions with a lookup",
@@ -155,8 +111,6 @@ export const HINT: Record<LimitKey, string> = {
   contextTokens: "an agent reads this file and its imports to change it: split it, or depend on smaller modules",
 };
 
-const tok = (n: number) => (n >= 1000 ? `${Math.round(n / 100) / 10}k` : `${n}`);
-
 /**
  * When imports are at least half of the context load, splitting the file itself can't bring
  * it under the limit, so the advice points at the largest import instead.
@@ -167,7 +121,7 @@ export function importsDominateHint(m: FileMetrics, ctx: ContextLoad | undefined
   const fromImports = total - m.fileTokens;
   if (!largest || fromImports < m.fileTokens) return undefined;
   return (
-    `most of it is imports (${tok(fromImports)} of ${tok(total)} tokens; largest: ${largest.path} ≈${tok(largest.tokens)}), ` +
+    `most of it is imports (${formatTokens(fromImports)} of ${formatTokens(total)} tokens; largest: ${largest.path} ≈${formatTokens(largest.tokens)}), ` +
     "so splitting this file won't lower it: slim or split the largest import, import a smaller module, " +
     "or add generated or data-only files to tokens.ignoreImports"
   );
@@ -175,21 +129,15 @@ export function importsDominateHint(m: FileMetrics, ctx: ContextLoad | undefined
 
 export const hintFor = (f: Finding): string => f.hint ?? HINT[f.metric];
 
+const STATUS_TAG: Record<FindingStatus, string> = {
+  "new-over": "new, over limit",
+  regression: "got worse",
+  over: "over limit",
+  allowed: "accepted by comment",
+  improved: "improved",
+};
+
 export function describe(f: Finding): string {
-  const where = f.fn ? `${f.fn}` : "file";
-  const change =
-    f.baseline !== undefined && f.baseline !== f.value
-      ? `${f.baseline} → ${f.value}`
-      : `${f.value}`;
-  const tag =
-    f.status === "new-over"
-      ? "new, over limit"
-      : f.status === "regression"
-        ? "got worse"
-        : f.status === "allowed"
-          ? "accepted by comment"
-          : f.status === "improved"
-            ? "improved"
-            : "over limit";
-  return `${where}: ${METRIC_LABEL[f.metric]} ${change} (limit ${f.limit}, ${tag})`;
+  const change = f.baseline !== undefined && f.baseline !== f.value ? `${f.baseline} → ${f.value}` : `${f.value}`;
+  return `${f.fn ?? "file"}: ${METRIC[f.metric].label} ${change} (limit ${f.limit}, ${STATUS_TAG[f.status]})`;
 }

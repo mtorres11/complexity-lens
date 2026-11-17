@@ -1,11 +1,12 @@
 // "What to fix" for a single file: its functions to fix, each with advice and actions.
 
 import type { FileDetail, FunctionDetail } from "../core/insights";
-import { button, h, link, send } from "./dom";
+import { functionMetricsText } from "../core/limits";
+import { actionButtons } from "./actions";
+import { h, link } from "./dom";
 import { openFunction, requestDetail, state } from "./state";
 
 function fnFix(d: FileDetail, f: FunctionDetail): HTMLElement {
-  const act = (kind: "fixPrompt" | "chore" | "accept") => () => send({ type: "action", kind, path: d.path, fn: f.key });
   return h(
     "div",
     { class: "fnfix" },
@@ -16,15 +17,9 @@ function fnFix(d: FileDetail, f: FunctionDetail): HTMLElement {
       " ",
       link(`line ${f.line}`, { type: "open", path: d.path, line: f.line }, { title: "Open at this line" }),
     ),
-    h("div", { class: "muted small" }, `cognitive ${f.cognitive} · cyclomatic ${f.cyclomatic} · nesting ${f.nesting} · ${f.lines} lines · ${f.parameters} param(s)`),
+    h("div", { class: "muted small" }, functionMetricsText(f, undefined, " · ")),
     f.advice.length ? h("ul", { class: "advice" }, ...f.advice.map((a) => h("li", null, a))) : null,
-    h(
-      "div",
-      { class: "actions" },
-      button("✨ Fix with AI", act("fixPrompt"), { title: "Copy a prompt for this function" }),
-      button("🧹 Chore", act("chore")),
-      button("Accept…", act("accept"), { title: "Keep it as is, with a reason in the code" }),
-    ),
+    actionButtons(d.path, f.key, ["fixPrompt", "chore", "accept"]),
   );
 }
 

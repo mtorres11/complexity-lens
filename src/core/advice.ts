@@ -2,7 +2,7 @@
 
 import type { FileMetrics, FunctionMetrics, Increment } from "./analyze";
 import type { FileSettings } from "./config";
-import { judgedLcom } from "./evaluate";
+import { isOver, judgedLcom } from "./limits";
 
 /** Points inside an increment's line range (including itself): what extracting it would remove. */
 function weight(inc: Increment, all: Increment[]): number {
@@ -30,26 +30,24 @@ export function hottestBlock(
 
 type Rule = (fn: FunctionMetrics, L: FileSettings["limits"]) => string | undefined;
 
-const over = (v: number, l: number | null) => l !== null && v > l;
-
 /** Each rule looks at one aspect and returns a suggestion, or nothing. */
 const RULES: Rule[] = [
   (fn, L) => {
     const hot = hottestBlock(fn);
-    if (!hot || !over(fn.cognitiveComplexity, L.cognitiveComplexity)) return undefined;
+    if (!hot || !isOver(fn.cognitiveComplexity, L.cognitiveComplexity)) return undefined;
     return `Move lines ${hot.inc.line}–${hot.inc.endLine} (the ${hot.inc.kind}) into its own function: about −${hot.points} cognitive.`;
   },
   (fn, L) => {
     const sw = fn.increments.find((i) => i.kind === "switch");
-    return sw && over(fn.cognitiveComplexity, L.cognitiveComplexity) ? `Replace the switch at line ${sw.line} with a lookup table or a map of handlers.` : undefined;
+    return sw && isOver(fn.cognitiveComplexity, L.cognitiveComplexity) ? `Replace the switch at line ${sw.line} with a lookup table or a map of handlers.` : undefined;
   },
-  (fn, L) => (over(fn.nestingDepth, L.nestingDepth) ? "Flatten the nesting with early returns (guard clauses)." : undefined),
+  (fn, L) => (isOver(fn.nestingDepth, L.nestingDepth) ? "Flatten the nesting with early returns (guard clauses)." : undefined),
   (fn, L) => {
     const logical = fn.increments.filter((i) => i.kind === "&&" || i.kind === "||" || i.kind === "??").length;
-    return over(fn.cyclomaticComplexity, L.cyclomaticComplexity) && logical >= 3 ? `Name the ${logical} boolean conditions as small helper functions (e.g. isEligible()).` : undefined;
+    return isOver(fn.cyclomaticComplexity, L.cyclomaticComplexity) && logical >= 3 ? `Name the ${logical} boolean conditions as small helper functions (e.g. isEligible()).` : undefined;
   },
-  (fn, L) => (over(fn.parameters, L.parameters) ? `Pass fewer than ${fn.parameters} things: split the function, or pass the object the values come from.` : undefined),
-  (fn, L) => (over(fn.functionLines, L.functionLines) ? "Split it into smaller functions that each do one job." : undefined),
+  (fn, L) => (isOver(fn.parameters, L.parameters) ? `Pass fewer than ${fn.parameters} things: split the function, or pass the object the values come from.` : undefined),
+  (fn, L) => (isOver(fn.functionLines, L.functionLines) ? "Split it into smaller functions that each do one job." : undefined),
 ];
 
 export function functionAdvice(fn: FunctionMetrics, s: FileSettings): string[] {
@@ -127,10 +125,7 @@ export function suggestSplit(
   const mod = m.cohesion.find((c) => c.scope === "module");
   if (!mod || mod.groups.length < 2) return undefined;
   const L = s.limits;
-  const big =
-    (L.fileLines !== null && m.fileLines > L.fileLines) ||
-    (L.fileTokens !== null && m.fileTokens > L.fileTokens) ||
-    (L.lcom !== null && judgedLcom(m, s) > L.lcom);
+  const big = isOver(m.fileLines, L.fileLines) || isOver(m.fileTokens, L.fileTokens) || isOver(judgedLcom(m, s), L.lcom);
   if (!big) return undefined;
   const ext = (/\.[^.]+$/.exec(m.path) ?? [".ts"])[0];
   const used = new Set<string>();

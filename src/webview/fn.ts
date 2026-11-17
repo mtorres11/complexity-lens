@@ -1,31 +1,12 @@
 // Analysis of one function: metrics, where the complexity is, calls, how to fix, actions.
 
+import { capitalize } from "../core/format";
 import type { FileDetail, FunctionDetail } from "../core/insights";
-import { button, h, link, section, send } from "./dom";
+import { FUNCTION_METRICS } from "../core/limits";
+import { actionButtons } from "./actions";
+import { h, link, section } from "./dom";
+import { metricRow } from "./metrics";
 import { openFunction } from "./state";
-
-function metricLine(
-  label: string,
-  now: number,
-  before: number | undefined,
-  limit: number | null,
-): HTMLElement {
-  const over = limit !== null && now > limit;
-  return h(
-    "div",
-    { class: "mrow" },
-    h("span", { class: "mlabel" }, label),
-    h("span", { class: "mnum" }, `${now}`),
-    h(
-      "span",
-      { class: "mnum muted" },
-      before === undefined ? "–" : `${before}`,
-    ),
-    h("span", { class: "mnum muted" }, limit === null ? "–" : `${limit}`),
-    h("span"),
-    h("span", { class: over ? "bad-text" : "ok-text" }, over ? "✖" : "✓"),
-  );
-}
 
 function whereSection(d: FileDetail, f: FunctionDetail): HTMLElement {
   const maxPoints = Math.max(...f.hotspots.map((x) => x.points), 0);
@@ -75,20 +56,16 @@ function header(d: FileDetail, f: FunctionDetail): HTMLElement {
     h("span", { class: f.over ? "bad-text" : "ok-text" }, f.over ? "✖ Hard to follow" : "✓ Within the limits"),
     h("span", { class: "muted" }, " · "),
     link(`line ${f.line}`, { type: "open", path: d.path, line: f.line }, { title: "Open at this line" }),
-    h("span", { class: "muted" }, ` · ${f.lines} lines`),
+    h("span", { class: "muted" }, ` · ${f.functionLines} lines`),
   );
 }
 
 function metricsSection(d: FileDetail, f: FunctionDetail): HTMLElement {
-  const L = d.limits;
-  const b = f.before;
   return section(
     "METRICS · now · last commit · limit",
-    metricLine("Cognitive", f.cognitive, b?.cognitive, L.cognitiveComplexity),
-    metricLine("Cyclomatic", f.cyclomatic, b?.cyclomatic, L.cyclomaticComplexity),
-    metricLine("Nesting", f.nesting, b?.nesting, L.nestingDepth),
-    metricLine("Lines", f.lines, b?.lines, L.functionLines),
-    metricLine("Parameters", f.parameters, b?.parameters, L.parameters),
+    ...FUNCTION_METRICS.map((m) =>
+      metricRow(capitalize(m.short), m, { now: f[m.key], before: f.before?.[m.key], limit: d.limits[m.key] }, false),
+    ),
   );
 }
 
@@ -97,20 +74,6 @@ function callsSection(d: FileDetail, f: FunctionDetail): HTMLElement {
     "CALLS / CALLED BY (in this file)",
     h("div", null, h("span", { class: "muted" }, "called by: "), ...fnLinks(d, f.calledBy)),
     h("div", null, h("span", { class: "muted" }, "calls: "), ...fnLinks(d, f.calls)),
-  );
-}
-
-function actionsSection(d: FileDetail, f: FunctionDetail): HTMLElement {
-  const act = (kind: "fixPrompt" | "chore" | "accept") => () => send({ type: "action", kind, path: d.path, fn: f.key });
-  return section(
-    "ACTIONS",
-    h(
-      "div",
-      { class: "actions" },
-      button("✨ Fix with AI", act("fixPrompt"), { title: "Copy a prompt for your AI agent" }),
-      button("🧹 Chore", act("chore")),
-      button("Accept…", act("accept"), { title: "Keep it as is, with a reason in the code" }),
-    ),
   );
 }
 
@@ -124,6 +87,6 @@ export function renderFunction(d: FileDetail, key: string): HTMLElement[] {
     whereSection(d, f),
     callsSection(d, f),
     f.advice.length ? section("HOW TO FIX", h("ul", { class: "advice" }, ...f.advice.map((a) => h("li", null, a)))) : null,
-    actionsSection(d, f),
+    section("ACTIONS", actionButtons(d.path, f.key, ["fixPrompt", "chore", "accept"])),
   ].filter((n): n is HTMLElement => !!n);
 }

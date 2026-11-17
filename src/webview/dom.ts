@@ -2,7 +2,7 @@
 // The CSP blocks inline style attributes, so sizes are set through the CSSOM (el.style.*).
 
 import type { FromWebview } from "../vscode/protocol";
-import type { Verdict } from "../core/verdict";
+import { VERDICT_TEXT, Verdict } from "../core/verdict";
 
 declare function acquireVsCodeApi(): { postMessage(m: unknown): void };
 const vscode = acquireVsCodeApi();
@@ -75,13 +75,6 @@ export function button(
   );
 }
 
-export const fmtTokens = (n: number): string =>
-  n >= 1e6
-    ? `${(n / 1e6).toFixed(1)}M`
-    : n >= 1000
-      ? `${(n / 1000).toFixed(1)}k`
-      : `${n}`;
-
 /** Bar filled to value/limit; green < 70%, mustard 70–100%, red over the limit. */
 export function bar(value: number, limit: number | null): HTMLElement {
   const el = h("div", { class: "bar" });
@@ -121,17 +114,10 @@ export function box(b: BoxSpec): HTMLElement {
   );
 }
 
-const VERDICT_TITLE: Record<Verdict, string> = {
-  FIX: "Fix: your change made it worse, or a hotspot (complex and changed often)",
-  PLAN: "Plan: over the limits and changed sometimes. Worth a ticket.",
-  LEAVE: "Leave: complex but rarely changed. Not worth refactoring now.",
-  OK: "Within the limits",
-};
-
 export const badge = (v: Verdict): HTMLElement =>
   h(
     "span",
-    { class: `badge v-${v.toLowerCase()}`, title: VERDICT_TITLE[v] },
+    { class: `badge v-${v.toLowerCase()}`, title: `${v}: ${VERDICT_TEXT[v].meaning}` },
     v,
   );
 

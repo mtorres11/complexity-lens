@@ -3,16 +3,15 @@
 import * as vscode from "vscode";
 import type { FileMetrics } from "../core/analyze";
 import type { Limits } from "../core/config";
+import { formatTokens } from "../core/format";
+import { isOver } from "../core/limits";
 import type { Project } from "../core/project";
-
-const tokens = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${n}`);
 
 function texts(m: FileMetrics, limits: Limits): { text: string; tooltip: string } {
   const worst = Math.max(0, ...m.functions.map((f) => f.cognitiveComplexity));
   const limit = limits.cognitiveComplexity;
-  const over = limit !== null && worst > limit;
   return {
-    text: `$(pulse) ${worst}${over ? " $(warning)" : ""} · ≈${tokens(m.fileTokens)} tok`,
+    text: `$(pulse) ${worst}${isOver(worst, limit) ? " $(warning)" : ""} · ≈${formatTokens(m.fileTokens)} tok`,
     tooltip: `Complexity Lens\nHighest function complexity: ${worst}${limit !== null ? ` (limit ${limit})` : ""}\nFile: ${m.fileLines} lines, ${m.imports} imports, ≈${m.fileTokens} tokens`,
   };
 }

@@ -3,26 +3,13 @@
 
 import type { LimitKey } from "../core/config";
 import type { FileSummary } from "../core/insights";
-import type { Verdict } from "../core/verdict";
+import { METRICS } from "../core/limits";
+import { Verdict, VERDICTS } from "../core/verdict";
 import { button, h, select } from "./dom";
 import { searchBox } from "./search";
-import { matchesFilter, state } from "./state";
+import { fixCommits, matchesFilter, state } from "./state";
 
-const VERDICTS: Verdict[] = ["FIX", "PLAN", "LEAVE", "OK"];
-
-const METRICS: [LimitKey | "", string][] = [
-  ["", "Any metric"],
-  ["cognitiveComplexity", "Cognitive complexity"],
-  ["cyclomaticComplexity", "Cyclomatic complexity"],
-  ["nestingDepth", "Nesting depth"],
-  ["functionLines", "Function length"],
-  ["parameters", "Parameters"],
-  ["fileLines", "File lines"],
-  ["fileTokens", "File tokens"],
-  ["imports", "Coupling (imports)"],
-  ["lcom", "Cohesion (LCOM)"],
-  ["contextTokens", "Context load"],
-];
+const METRIC_OPTIONS: [LimitKey | "", string][] = [["", "Any metric"], ...METRICS.map((m): [LimitKey, string] => [m.key, m.title])];
 
 export const reportFilter: {
   hidden: Set<Verdict>;
@@ -47,8 +34,7 @@ function keep(r: FileSummary): boolean {
   const f = reportFilter;
   if (f.hidden.has(r.verdict)) return false;
   if (f.metric && !r.overLimits.includes(f.metric)) return false;
-  if (f.hotspots && r.churn.commits < (state.update?.fixCommits ?? 6))
-    return false;
+  if (f.hotspots && r.churn.commits < fixCommits()) return false;
   if (f.problems && !r.problems.length) return false;
   return matchesFilter(r.path);
 }
@@ -120,7 +106,7 @@ export function renderReportFilters(rows: FileSummary[]): HTMLElement {
       h("span", { class: "row-label" }, "Over"),
       select(
         reportFilter.metric,
-        METRICS,
+        METRIC_OPTIONS,
         (v) => ((reportFilter.metric = v as LimitKey | ""), state.render()),
       ),
     ),

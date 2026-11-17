@@ -39,6 +39,9 @@ export const state: {
   render: () => undefined,
 };
 
+/** Commits that make an over-limit file a hotspot, as sent by the host. */
+export const fixCommits = (): number => state.update?.fixCommits ?? 0;
+
 /** Paths that match the search filter (all of them when the filter is empty). */
 export const matchesFilter = (path: string): boolean => !state.filter || path.toLowerCase().includes(state.filter.toLowerCase());
 

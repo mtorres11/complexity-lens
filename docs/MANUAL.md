@@ -187,8 +187,8 @@ Repo   [ Rules… ]  [ Agent hook… ]
 
 ┌ libs/tools/src/finder/findCompanies.ts     FIX  🔍 🛠 ┐
 │ Cognitive 41 │ Cyclomatic 28 │ Nesting 6               │
-│ Churn 14×    │ Coupling Ca 9·Ce 18 │ Cohesion LCOM 3   │
-│ Context load ≈38k tok                                  │
+│ Churn 14×    │ Coupling Ca 9·Ce 18 │ Cohesion 3        │
+│ Context load ≈38k                                      │
 │ ▸ 3 problem(s)                                         │
 └────────────────────────────────────────────────────────┘
 ```
@@ -281,12 +281,12 @@ and **Ignore** (the file name opens the file). At the bottom: **🎫 Ticket draf
 **Inline scores** appear above every function:
 
 ```
-complexity 18 ⚠ · 62 lines ⚠ · nesting 3
+cognitive 18 ⚠ · lines 62 ⚠ · nesting 3
 function buildQuery(filters: Filters, opts: Options): Query {
 ```
 
 - **⚠** marks a value over its limit.
-- **Click** the line for the full breakdown: cognitive complexity, lines, nesting and parameters, each with its limit, and *Accepted by comment* when the function has a `complexity-ok` comment.
+- **Click** the line for the full breakdown: cognitive and cyclomatic complexity, function length, nesting depth and parameters, each with its limit, and *Accepted by comment* when the function has a `complexity-ok` comment.
 - Turn them off with `complexityLens.inlineScores: false`.
 
 **Status bar** (bottom): a pulse icon followed by **`18 ⚠ · ≈3.2k tok`** shows the current file's highest function complexity, a warning if it's over

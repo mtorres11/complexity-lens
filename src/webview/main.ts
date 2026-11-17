@@ -1,25 +1,28 @@
 // Complexity Lens sidebar entry point: tabs, drill-down screens, notices and the footer.
 
-import type { ToWebview } from "../vscode/protocol";
+import { formatTokens } from "../core/format";
+import { Scope, SCOPES, Sort, SORTS, Tab, TABS, ToWebview } from "../vscode/protocol";
 import { reportCard } from "./cards";
 import { applyReportFilters, renderReportFilters } from "./reportFilters";
-import { button, fmtTokens, h, link, select, send } from "./dom";
+import { button, h, link, select, send } from "./dom";
 import { renderFile } from "./file";
 import { renderFunction } from "./fn";
 import { back, home, requestDetail, state, top } from "./state";
 import { restoreSearchFocus } from "./search";
-import { renderChange, renderTodo } from "./tabs";
+import { renderChange } from "./change";
+import { renderTodo } from "./todo";
 
 const app = document.getElementById("app") as HTMLElement;
 
-const TAB_LABELS: [string, string][] = [
-  ["report", "Report"],
-  ["change", "Your change"],
-  ["todo", "What to fix"],
-];
+const TAB_LABEL: Record<Tab, string> = { report: "Report", change: "Your change", todo: "What to fix" };
+const SCOPE_LABEL: Record<Scope, string> = { changed: "Changed files", repo: "Whole repo", current: "Current file" };
+const SORT_LABEL: Record<Sort, string> = { payoff: "Payoff", aiCost: "Context load", complexity: "Complexity", churn: "Churn", name: "Name" };
+
+/** Options for a select, in the protocol's order. */
+const options = <T extends string>(values: readonly T[], labels: Record<T, string>): [T, string][] => values.map((v) => [v, labels[v]]);
 
 /** A tab opened directly shows everything: the search filter is cleared. */
-function openTab(id: "report" | "change" | "todo"): void {
+function openTab(id: Tab): void {
   state.filter = "";
   state.pinned = undefined;
   home();
@@ -31,15 +34,15 @@ function tabs(): HTMLElement {
   return h(
     "div",
     { class: "tabs", role: "tablist" },
-    ...TAB_LABELS.map(([id, label]) =>
+    ...TABS.map((id) =>
       h(
         "button",
         {
           class: `tab${u?.tab === id && !state.stack.length ? " on" : ""}`,
           role: "tab",
-          onclick: () => openTab(id as "report"),
+          onclick: () => openTab(id),
         },
-        label,
+        TAB_LABEL[id],
       ),
     ),
   );
@@ -60,29 +63,11 @@ function reportControls(): HTMLElement {
     { class: "controls" },
     row(
       "Scope",
-      select(
-        u.scope,
-        [
-          ["changed", "Changed files"],
-          ["repo", "Whole repo"],
-          ["current", "Current file"],
-        ],
-        (v) => send({ type: "scope", value: v as "repo" }),
-      ),
+      select(u.scope, options(SCOPES, SCOPE_LABEL), (v) => send({ type: "scope", value: v as Scope })),
     ),
     row(
       "Sort",
-      select(
-        u.sort,
-        [
-          ["payoff", "Payoff"],
-          ["aiCost", "Context load"],
-          ["complexity", "Complexity"],
-          ["churn", "Churn"],
-          ["name", "Name"],
-        ],
-        (v) => send({ type: "sort", value: v as "payoff" }),
-      ),
+      select(u.sort, options(SORTS, SORT_LABEL), (v) => send({ type: "sort", value: v as Sort })),
     ),
     h(
       "div",
@@ -150,7 +135,7 @@ function reportBody(): HTMLElement[] {
   const emptyText = all.length ? "No files match the filters." : state.update?.scope === "changed" ? "No changed files to check. Edit something, or switch Scope to Whole repo." : "No matching files.";
   return [
     renderReportFilters(all),
-    h("div", { class: "summary" }, `${shown} · ${problems} problem(s) · context ≈${fmtTokens(tokens)} tokens`),
+    h("div", { class: "summary" }, `${shown} · ${problems} problem(s) · context ≈${formatTokens(tokens)} tokens`),
     rows.length ? null : h("div", { class: "empty muted" }, emptyText),
     ...rows.slice(0, 300).map(reportCard),
     rows.length > 300 ? h("div", { class: "muted small" }, `Showing the first 300 of ${rows.length}. Narrow the filters to see the rest.`) : null,

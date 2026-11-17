@@ -104,6 +104,13 @@ export const PRESETS: Record<
   },
 };
 
+/** What each preset is for, in the order they are offered. */
+export const PRESET_INFO: Record<PresetName, string> = {
+  recommended: "Balanced: nudge after edits, block on finish (ratchet), CI warns",
+  relaxed: "Inform only, higher limits: try it on a big existing codebase",
+  strict: "Lower limits, absolute policy, CI fails: for new projects",
+};
+
 export function defaultConfig(preset: PresetName = "recommended"): Config {
   const p = PRESETS[preset];
   return {

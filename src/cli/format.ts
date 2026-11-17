@@ -2,7 +2,7 @@
 
 import { describe, Finding, hintFor, isProblem } from "../core/evaluate";
 
-export function groupByPath(findings: Finding[]): Map<string, Finding[]> {
+function groupByPath(findings: Finding[]): Map<string, Finding[]> {
   const out = new Map<string, Finding[]>();
   for (const f of findings) {
     const list = out.get(f.path) ?? [];
@@ -12,15 +12,15 @@ export function groupByPath(findings: Finding[]): Map<string, Finding[]> {
   return out;
 }
 
+/** Problems grouped by file: "  path" then "    ✖ line N  description" per problem. */
+function problemLines(problems: Finding[]): string[] {
+  return [...groupByPath(problems)].flatMap(([p, list]) => [`  ${p}`, ...list.map((f) => `    ✖ line ${f.line}  ${describe(f)}`)]);
+}
+
 export function text(findings: Finding[]): string {
   const problems = findings.filter(isProblem);
   if (!problems.length) return "Complexity Lens: no problems found.";
-  const lines = [`Complexity Lens: ${problems.length} problem(s)`];
-  for (const [p, list] of groupByPath(problems)) {
-    lines.push(`  ${p}`);
-    for (const f of list) lines.push(`    ✖ line ${f.line}  ${describe(f)}`);
-  }
-  return lines.join("\n");
+  return [`Complexity Lens: ${problems.length} problem(s)`, ...problemLines(problems)].join("\n");
 }
 
 // GitHub Actions workflow commands: escape per the documented rules.
@@ -57,11 +57,7 @@ export function agentMessage(
   footer: string,
 ): string {
   const problems = findings.filter(isProblem);
-  const lines = [header];
-  for (const [p, list] of groupByPath(problems)) {
-    lines.push(`  ${p}`);
-    for (const f of list) lines.push(`    ✖ line ${f.line}  ${describe(f)}`);
-  }
+  const lines = [header, ...problemLines(problems)];
   const hints = [...new Set(problems.map(hintFor))];
   if (hints.length) {
     lines.push("  How to fix:");

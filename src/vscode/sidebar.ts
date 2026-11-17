@@ -3,6 +3,7 @@
 
 import { randomBytes } from "crypto";
 import * as vscode from "vscode";
+import { defaultConfig } from "../core/config";
 import * as git from "../core/git";
 import type { Project } from "../core/project";
 import type { About } from "./about";
@@ -143,7 +144,7 @@ export class Sidebar implements vscode.WebviewViewProvider {
         version: this.about.version,
         hasRepo: !!this.about.repoUrl,
       },
-      fixCommits: c.project?.config.verdicts.fixCommits ?? 6,
+      fixCommits: (c.project?.config ?? defaultConfig()).verdicts.fixCommits,
     };
   }
 

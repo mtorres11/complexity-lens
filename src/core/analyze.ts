@@ -8,7 +8,7 @@
 
 import * as ts from "typescript";
 import { classCohesion, Cohesion, moduleCohesion } from "./cohesion";
-import { countImports, FnNode, isFunctionNode, ownName } from "./names";
+import { countImports, FnNode, isFunctionNode, ownName, simpleName } from "./names";
 import { estimateTokens } from "./tokens";
 import { FunctionWalker, Increment } from "./walker";
 
@@ -20,6 +20,8 @@ export interface FunctionMetrics {
   /** Stable key used to match the same function across versions, e.g. "Parser.parse". */
   key: string;
   name: string;
+  /** The bare member or function name, without the class prefix, for matching calls ("parse"). */
+  simpleName: string;
   line: number;
   endLine: number;
   cognitiveComplexity: number;
@@ -114,6 +116,7 @@ function measure(
   return {
     key,
     name,
+    simpleName: simpleName(n) ?? name,
     line,
     endLine,
     cognitiveComplexity: w.cognitive,

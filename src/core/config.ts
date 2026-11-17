@@ -4,28 +4,24 @@
 // a URL or a path outside the repository.
 
 import { matchesAny } from "./glob";
+import type { LimitKey } from "./limits";
 
 export { PRESETS, defaultConfig } from "./presets";
+export { LIMIT_KEYS } from "./limits";
+export type { LimitKey } from "./limits";
 
-export type Policy = "ratchet" | "absolute";
-export type AfterEditMode = "off" | "inform" | "nudge";
-export type OnFinishMode = "off" | "inform" | "block";
-export type CiMode = "off" | "warn" | "failOnRegression" | "failOverLimit";
-export type PresetName = "relaxed" | "recommended" | "strict";
+export const PRESET_NAMES = ["relaxed", "recommended", "strict"] as const;
+export const POLICIES = ["ratchet", "absolute"] as const;
+export const AFTER_EDIT_MODES = ["off", "inform", "nudge"] as const;
+export const ON_FINISH_MODES = ["off", "inform", "block"] as const;
+export const CI_MODES = ["off", "warn", "failOnRegression", "failOverLimit"] as const;
 
-export const LIMIT_KEYS = [
-  "cognitiveComplexity",
-  "cyclomaticComplexity",
-  "functionLines",
-  "nestingDepth",
-  "parameters",
-  "fileLines",
-  "fileTokens",
-  "imports",
-  "lcom",
-  "contextTokens",
-] as const;
-export type LimitKey = (typeof LIMIT_KEYS)[number];
+export type PresetName = (typeof PRESET_NAMES)[number];
+export type Policy = (typeof POLICIES)[number];
+export type AfterEditMode = (typeof AFTER_EDIT_MODES)[number];
+export type OnFinishMode = (typeof ON_FINISH_MODES)[number];
+export type CiMode = (typeof CI_MODES)[number];
+
 /** A limit of null turns that check off. */
 export type Limits = Record<LimitKey, number | null>;
 

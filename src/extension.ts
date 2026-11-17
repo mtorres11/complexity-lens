@@ -4,9 +4,10 @@ import * as fs from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
 import { PresetName } from "./core/config";
+import { PRESET_INFO } from "./core/presets";
 import * as git from "./core/git";
 import { CONFIG_FILE, Project } from "./core/project";
-import { configTemplate } from "./core/template";
+import { createConfigFile } from "./node/configFile";
 import { refreshShim } from "./node/hookSetup";
 import { installHook } from "./vscode/hookInstaller";
 import { ComplexityCodeLens, explain, LANGUAGES } from "./vscode/lens";
@@ -142,40 +143,15 @@ export function activate(context: vscode.ExtensionContext): void {
 }
 
 async function openOrCreateConfig(project: Project | undefined): Promise<void> {
-  if (!project)
-    return void vscode.window.showWarningMessage(
-      "Complexity Lens: open a folder first.",
-    );
+  if (!project) return void vscode.window.showWarningMessage("Complexity Lens: open a folder first.");
   const file = path.join(project.root, CONFIG_FILE);
   if (!fs.existsSync(file)) {
-    const pick = await vscode.window.showQuickPick(
-      [
-        {
-          label: "recommended",
-          description:
-            "Balanced: nudge after edits, block on finish (ratchet), CI warns",
-        },
-        {
-          label: "relaxed",
-          description:
-            "Inform only, higher limits: try it on a big existing codebase",
-        },
-        {
-          label: "strict",
-          description:
-            "Lower limits, absolute policy, CI fails: for new projects",
-        },
-      ],
-      { title: `Create ${CONFIG_FILE} with which preset?` },
-    );
+    const items = Object.entries(PRESET_INFO).map(([label, description]) => ({ label, description }));
+    const pick = await vscode.window.showQuickPick(items, { title: `Create ${CONFIG_FILE} with which preset?` });
     if (!pick) return;
-    fs.writeFileSync(file, configTemplate(pick.label as PresetName), {
-      flag: "wx",
-    });
+    createConfigFile(project.root, pick.label as PresetName);
   }
-  await vscode.window.showTextDocument(
-    await vscode.workspace.openTextDocument(file),
-  );
+  await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(file));
 }
 
 export function deactivate(): void {
