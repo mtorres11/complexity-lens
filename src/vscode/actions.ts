@@ -4,9 +4,16 @@
 import * as path from "path";
 import * as vscode from "vscode";
 import * as text from "../core/actions";
+import { choreList, prSummary } from "../core/summaries";
 import type { FileDetail } from "../core/insights";
 import type { Project } from "../core/project";
 import type { ActionKind, BatchKind } from "./protocol";
+
+/** Extra repo-specific rules for prompts and tickets (setting complexityLens.fixPromptGuidelines). */
+function guidelines(): string[] {
+  const list = vscode.workspace.getConfiguration("complexityLens").get<unknown>("fixPromptGuidelines");
+  return Array.isArray(list) ? list.filter((g): g is string => typeof g === "string" && g.trim() !== "").map((g) => g.trim()) : [];
+}
 
 async function copy(value: string, what: string): Promise<void> {
   await vscode.env.clipboard.writeText(value);
@@ -105,14 +112,14 @@ export async function runAction(
   const fn = d.functions.find((f) => f.key === fnKey);
   if (kind === "fixPrompt")
     return copy(
-      fn ? text.functionFixPrompt(d, fn) : text.fileFixPrompt(d),
+      fn ? text.functionFixPrompt(d, fn, guidelines()) : text.fileFixPrompt(d, guidelines()),
       "fix prompt",
     );
   if (kind === "chore") return copy(text.chore(d, fn), "chore");
   if (kind === "ticket")
     return deliverMarkdown(
       deps.project,
-      text.ticketDraft(d),
+      text.ticketDraft(d, guidelines()),
       `${slug(d.path)}-complexity.md`,
       "Ticket draft",
     );
@@ -132,18 +139,20 @@ export async function runBatch(
     return copy(
       text.fixAllPrompt(
         (await deps.changeItems()).filter((s) => s.problems.length),
+        guidelines(),
       ),
       "fix-all prompt",
     );
   if (kind === "prSummary")
-    return copy(text.prSummary(await deps.changeItems()), "PR summary");
+    return copy(prSummary(await deps.changeItems()), "PR summary");
   if (kind === "choreList")
-    return copy(text.choreList(await deps.topFix()), "chore list");
+    return copy(choreList(await deps.topFix()), "chore list");
   const top = await deps.topFix();
   const drafts: string[] = [];
+  const extra = guidelines();
   for (const s of top) {
     const d = await deps.detail(s.path);
-    if (d) drafts.push(text.ticketDraft(d));
+    if (d) drafts.push(text.ticketDraft(d, extra));
   }
   if (!drafts.length)
     return void vscode.window.showInformationMessage(

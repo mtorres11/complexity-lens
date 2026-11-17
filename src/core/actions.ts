@@ -1,8 +1,9 @@
-// Text produced by the action buttons: AI prompts, ticket drafts, chores, PR summaries.
+// Text produced by the action buttons: AI fix prompts, ticket drafts and chores.
 // Plain text / Markdown with no product-specific format, so it can be pasted anywhere.
 
 import type { FileDetail, FileSummary, FunctionDetail } from "./insights";
 import { METRIC_LABEL } from "./evaluate";
+import { CHORE_SUFFIX, designNoteLines, guidance, sentence } from "./guidance";
 
 const k = (n: number) => (n >= 1000 ? `${Math.round(n / 100) / 10}k` : `${n}`);
 
@@ -45,12 +46,17 @@ const hotLines = (f: FunctionDetail) =>
     .map((h) => `the ${h.kind} at line ${h.line} (+${h.points})`)
     .join(", ");
 
-export function functionFixPrompt(d: FileDetail, f: FunctionDetail): string {
+export function functionFixPrompt(
+  d: FileDetail,
+  f: FunctionDetail,
+  extra: readonly string[] = [],
+): string {
   return [
     `Refactor \`${f.key}\` in ${d.path} (lines ${f.line}–${f.endLine}).`,
     `Problem: ${functionProblem(f, d)}.`,
     f.hotspots.length ? `Where the complexity is: ${hotLines(f)}.` : "",
     f.advice.length ? `Suggested: ${f.advice.join(" ")}` : "",
+    ...guidance(extra),
     RULES,
     limitsLine(d),
   ]
@@ -69,7 +75,7 @@ function splitText(d: FileDetail): string {
 
 const importsText = (d: FileDetail) => (d.context.importsAdvice ? `Context load: ${d.context.importsAdvice}.` : "");
 
-export function fileFixPrompt(d: FileDetail): string {
+export function fileFixPrompt(d: FileDetail, extra: readonly string[] = []): string {
   const bad = d.functions.filter((f) => f.over).slice(0, 5);
   return [
     `Refactor ${d.path} to make it easier to work on.`,
@@ -83,6 +89,7 @@ export function fileFixPrompt(d: FileDetail): string {
     splitText(d),
     importsText(d),
     "Update imports in the files that depend on it.",
+    ...guidance(extra),
     RULES,
     limitsLine(d),
   ]
@@ -119,11 +126,16 @@ function criteriaLines(d: FileDetail): string[] {
   const lines: string[] = [];
   if (L.cognitiveComplexity !== null) lines.push(`- No function over cognitive ${L.cognitiveComplexity}${L.nestingDepth !== null ? ` or nesting ${L.nestingDepth}` : ""}.`);
   if (L.fileTokens !== null) lines.push(`- Each resulting file ≤ ${k(L.fileTokens)} tokens.`);
-  lines.push("- Behaviour unchanged; all existing tests pass.");
+  lines.push(
+    "- No duplicated logic or data introduced; each decision on a type/kind/mode lives in one place.",
+    "- Decisions that don't change inside a loop are made before it; no re-parsing in loops or comparators.",
+    "- Total complexity of the touched code goes down, not just the per-function maximum.",
+    "- Behaviour unchanged, proven by tests (add tests that pin current behaviour first if coverage is missing); all existing tests pass.",
+  );
   return lines;
 }
 
-export function ticketDraft(d: FileDetail): string {
+export function ticketDraft(d: FileDetail, extra: readonly string[] = []): string {
   const label = d.verdict === "FIX" ? d.reason : d.verdict.toLowerCase();
   return [
     `# Reduce complexity of ${d.path.split("/").pop()} (${label})`,
@@ -136,6 +148,9 @@ export function ticketDraft(d: FileDetail): string {
     "## Proposed approach",
     ...approachLines(d),
     "",
+    "## Design notes",
+    ...designNoteLines(extra),
+    "",
     "## Acceptance criteria",
     ...criteriaLines(d),
     "",
@@ -145,52 +160,23 @@ export function ticketDraft(d: FileDetail): string {
 
 export function chore(d: FileDetail, f?: FunctionDetail): string {
   if (f)
-    return `Chore: simplify \`${f.key}\` in ${d.path} (line ${f.line}): ${f.advice[0] ?? functionProblem(f, d)}`;
-  return `Chore: tidy ${d.path}: ${d.split ? splitText(d) : (d.functions.find((x) => x.over)?.advice[0] ?? d.why)}`;
+    return `Chore: simplify \`${f.key}\` in ${d.path} (line ${f.line}): ${sentence(f.advice[0] ?? functionProblem(f, d))}${CHORE_SUFFIX}`;
+  const what = d.split ? splitText(d) : (d.functions.find((x) => x.over)?.advice[0] ?? d.why);
+  return `Chore: tidy ${d.path}: ${sentence(what)}${CHORE_SUFFIX}`;
 }
 
-export function fixAllPrompt(items: FileSummary[]): string {
+export function fixAllPrompt(items: FileSummary[], extra: readonly string[] = []): string {
   const lines = items.flatMap((s) =>
     s.problems.map((p) => `- ${s.path} line ${p.line}: ${p.text}`),
   );
   return [
     "These changes made the code harder to work with. Fix each one before the pull request:",
     ...lines,
+    ...guidance(extra),
     RULES,
     items[0] ? limitsLine(items[0]) : "",
     'If one is genuinely necessary, add "// complexity-ok: <reason>" above that function instead.',
   ]
     .filter(Boolean)
-    .join("\n");
-}
-
-export function prSummary(items: FileSummary[]): string {
-  const problems = items.reduce((n, s) => n + s.problems.length, 0);
-  const improved = items.flatMap((s) =>
-    s.notes.filter((n) => n.status === "improved"),
-  );
-  const accepted = items.flatMap((s) =>
-    s.notes.filter((n) => n.status === "allowed"),
-  );
-  return [
-    "**Complexity**",
-    problems
-      ? `- ${problems} item(s) got more complex:`
-      : "- No function or file got more complex.",
-    ...items.flatMap((s) => s.problems.map((p) => `  - ${s.path}: ${p.text}`)),
-    improved.length
-      ? `- ${improved.length} improvement(s): ${improved.map((i) => i.text).join("; ")}`
-      : "",
-    accepted.length
-      ? `- ${accepted.length} accepted with a reason in the code.`
-      : "",
-  ]
-    .filter(Boolean)
-    .join("\n");
-}
-
-export function choreList(items: FileSummary[]): string {
-  return items
-    .map((s, i) => `${i + 1}. [${s.verdict}] ${s.path}: ${s.reason}. ${s.why}`)
     .join("\n");
 }

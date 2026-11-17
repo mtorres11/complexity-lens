@@ -105,6 +105,7 @@ node complexity-lens-cli.js check --base origin/main --format github
 | `complexityLens.inlineScores` | `true` | Scores above each function. |
 | `complexityLens.statusBar` | `true` | Current-file summary in the status bar. |
 | `complexityLens.maxFiles` | `3000` | Cap for the whole-repo view. |
+| `complexityLens.fixPromptGuidelines` | `[]` | Extra rules added to every **Fix with AI** prompt and **Ticket draft**, one per item (for example your repo's conventions). Set it per workspace. |
 | `complexityLens.hookSettingsFile` | *(empty)* | Your agent's hook settings file, relative to the repo root, used by **Install Agent Hook**. Empty = ask. |
 
 ## Security and privacy

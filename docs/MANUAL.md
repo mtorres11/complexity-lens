@@ -262,9 +262,9 @@ and **Ignore** (the file name opens the file). At the bottom: **🎫 Ticket draf
 
 | Action | Produces |
 | --- | --- |
-| **✨ Fix with AI** | A short progress note while it's prepared, then *“Fix prompt copied to the clipboard. Paste it into your AI agent.”* The prompt contains: the file or function, the exact problem and numbers, where the complexity is, the suggested fix, and the rules (*don't change behaviour, keep tests passing, no new dependencies, end within the limits*). Copied to the clipboard. |
-| **🎫 Ticket draft** | A Markdown ticket: title, problem (with the numbers), proposed approach (including the split), acceptance criteria, and a size. **Copy to clipboard** or **Save as Markdown file…** |
-| **🧹 Chore** | A one-line chore for small cleanups. Copied to the clipboard. |
+| **✨ Fix with AI** | A short progress note while it's prepared, then *“Fix prompt copied to the clipboard. Paste it into your AI agent.”* The prompt contains: the file or function, the exact problem and numbers, where the complexity is, the suggested fix, the design rules (*fix the design, don't just move code; DRY, KISS, YAGNI; decide once outside loops and don't re-parse in loops or comparators; don't game the limits with one-use wrappers or parameter objects; state the plan first; pin behaviour with tests if coverage is missing*), any extra rules from `complexityLens.fixPromptGuidelines`, and the rules (*don't change behaviour, keep tests passing, no new dependencies, end within the limits*). Copied to the clipboard. |
+| **🎫 Ticket draft** | A Markdown ticket: title, problem (with the numbers), proposed approach (including the split), design notes (the same design rules, plus `complexityLens.fixPromptGuidelines`), acceptance criteria (limits, no duplicated logic, loop-invariant decisions hoisted, total complexity down, behaviour proven by tests), and a size. **Copy to clipboard** or **Save as Markdown file…** |
+| **🧹 Chore** | A one-line chore for small cleanups, ending with a short reminder (*keep it DRY and simple, decide once outside loops, no behaviour change*). Copied to the clipboard. |
 | **Accept…** | Asks for a reason, then adds `// complexity-ok: <reason>` above the function. |
 | **Ignore** | Hides the file from *What to fix* on this machine. |
 
@@ -634,6 +634,7 @@ node ~/.complexity-lens/cli.js init --preset strict                    # new pro
 | `complexityLens.inlineScores` | `true` / `false` | `true` |
 | `complexityLens.statusBar` | `true` / `false` | `true` |
 | `complexityLens.maxFiles` | 100–20000 | `3000` |
+| `complexityLens.fixPromptGuidelines` | list of strings (per workspace) | `[]` |
 | `complexityLens.hookSettingsFile` | repo-relative `.json` path | *(empty: ask)* |
 
 ---
