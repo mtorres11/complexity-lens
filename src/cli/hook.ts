@@ -11,7 +11,7 @@ import * as crypto from "crypto";
 import * as fs from "fs";
 import * as path from "path";
 import { Finding, isProblem } from "../core/evaluate";
-import { settingsFor } from "../core/config";
+import { allowCommentText } from "../core/config";
 import * as git from "../core/git";
 import { Project } from "../core/project";
 import { agentMessage } from "./format";
@@ -114,12 +114,12 @@ export function postEdit(input: HookInput): object | undefined {
   const rel = editedFile(input, project);
   if (!rel) return undefined;
   remember(project, input, rel);
-  const s = settingsFor(project.config, rel);
+  const s = project.settings(rel);
   if (s.hook.afterEdit === "off") return undefined;
   const problems = project.evaluate(rel).findings.filter(isProblem);
   if (!problems.length) return undefined;
   const nudge = s.hook.afterEdit === "nudge";
-  const footer = nudge ? `Simplify before continuing, or add "// ${s.allowComment.marker}: <reason>" above a function if this complexity is necessary.` : "(For information.)";
+  const footer = nudge ? `Simplify before continuing, or add "${allowCommentText(s.allowComment.marker, "<reason>")}" above a function if this complexity is necessary.` : "(For information.)";
   const msg = agentMessage(problems, `Complexity Lens: ${rel}`, footer);
   return nudge ? { decision: "block", reason: msg } : { hookSpecificOutput: { hookEventName: "PostToolUse", additionalContext: msg } };
 }
@@ -133,7 +133,7 @@ function sessionProblems(
   let blocking = false;
   let maxRetries = 0;
   for (const rel of files) {
-    const s = settingsFor(project.config, rel);
+    const s = project.settings(rel);
     if (s.hook.onFinish === "off" || !project.includes(rel)) continue;
     const found = project.evaluate(rel).findings.filter(isProblem);
     if (!found.length) continue;

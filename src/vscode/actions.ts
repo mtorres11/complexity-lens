@@ -4,6 +4,7 @@
 import * as path from "path";
 import * as vscode from "vscode";
 import * as text from "../core/actions";
+import { allowCommentText } from "../core/config";
 import { choreList, prSummary } from "../core/summaries";
 import type { FileDetail } from "../core/insights";
 import type { Project } from "../core/project";
@@ -61,10 +62,10 @@ async function accept(
     return void vscode.window.showInformationMessage(
       "Complexity Lens: nothing to accept in this file.",
     );
-  const marker = project.config.allowComment.marker;
+  const marker = project.settings(d.path).allowComment.marker;
   const reason = await vscode.window.showInputBox({
     title: `Accept ${fn.key} as it is`,
-    prompt: `Why is this complexity necessary? It's added as "// ${marker}: <reason>" above the function.`,
+    prompt: `Why is this complexity necessary? It's added as "${allowCommentText(marker, "<reason>")}" above the function.`,
     validateInput: (v) =>
       v.trim().length >= 3
         ? undefined
@@ -80,7 +81,7 @@ async function accept(
   edit.insert(
     doc.uri,
     new vscode.Position(fn.line - 1, 0),
-    `${indent}// ${marker}: ${reason.trim().replace(/\s+/g, " ")}\n`,
+    `${indent}${allowCommentText(marker, reason.trim().replace(/\s+/g, " "))}\n`,
   );
   await vscode.workspace.applyEdit(edit);
   await vscode.window.showTextDocument(doc, {

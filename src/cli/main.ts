@@ -66,9 +66,9 @@ function flag(
   return v;
 }
 
-function openProject(args: Args): Project {
+function openProject(args: Args, policy?: Policy): Project {
   const cwd = path.resolve(flag(args, "--cwd") ?? process.cwd());
-  return new Project(git.repoRoot(cwd) ?? cwd);
+  return new Project(git.repoRoot(cwd) ?? cwd, { useGit: true, policy });
 }
 
 function exitCodeFor(mode: CiMode, findings: Finding[]): number {
@@ -89,12 +89,6 @@ function reportConfig(project: Project): boolean {
 function checkOptions(args: Args, project: Project) {
   const base = flag(args, "--base") ?? "HEAD";
   if (!git.isSafeRef(base)) throw new UsageError(`--base: "${base}" is not a valid git ref`);
-  const policy = flag(args, "--policy", ["ratchet", "absolute"]) as Policy | undefined;
-  if (policy) {
-    // One-off audit: judge everything with this policy, ignoring the repo's choice.
-    project.config.policy = policy;
-    for (const o of project.config.overrides) o.policy = policy;
-  }
   return {
     base,
     fmt: flag(args, "--format", ["text", "github", "json"]) ?? "text",
@@ -116,7 +110,8 @@ function render(fmt: string, findings: Finding[], failed: boolean): string {
 }
 
 function check(args: Args): number {
-  const project = openProject(args);
+  // --policy is a one-off audit: every file is judged with it, ignoring the repo's choice.
+  const project = openProject(args, flag(args, "--policy", ["ratchet", "absolute"]) as Policy | undefined);
   if (!reportConfig(project)) return 2;
   const { base, fmt, mode } = checkOptions(args, project);
   if (mode === "off") return 0;

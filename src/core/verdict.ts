@@ -8,6 +8,7 @@
 import type { FileMetrics } from "./analyze";
 import type { Churn } from "./churn";
 import type { Config, FileSettings, LimitKey } from "./config";
+import { ContextLoad, contextTokensOf } from "./context";
 import { Finding, isProblem, judgedLcom } from "./evaluate";
 
 export type Verdict = "FIX" | "PLAN" | "LEAVE" | "OK";
@@ -24,7 +25,7 @@ export interface Decision {
 }
 
 /** Current values over their limits, ignoring functions accepted by the allow comment. */
-export function overLimits(m: FileMetrics, s: FileSettings): LimitKey[] {
+export function overLimits(m: FileMetrics, s: FileSettings, ctx?: ContextLoad): LimitKey[] {
   const L = s.limits;
   const fns = m.functions.filter(
     (f) =>
@@ -49,7 +50,7 @@ export function overLimits(m: FileMetrics, s: FileSettings): LimitKey[] {
     fileTokens: m.fileTokens,
     imports: m.imports,
     lcom: judgedLcom(m, s),
-    contextTokens: m.contextTokens,
+    contextTokens: ctx && contextTokensOf(m, ctx),
   };
   return (Object.keys(values) as LimitKey[]).filter((k) => {
     const v = values[k];
@@ -60,12 +61,7 @@ export function overLimits(m: FileMetrics, s: FileSettings): LimitKey[] {
 
 const k = (n: number) => (n >= 1000 ? `${Math.round(n / 100) / 10}k` : `${n}`);
 
-function why(
-  m: FileMetrics,
-  churn: Churn | undefined,
-  ca: number,
-  regressed: boolean,
-): string {
+function why({ metrics: m, churn, ca, context }: DecideInput, regressed: boolean): string {
   const parts: string[] = [];
   if (regressed) parts.push("This change made it harder to work with.");
   if (churn && churn.commits > 0)
@@ -76,8 +72,8 @@ function why(
     parts.push(
       `${ca} file${ca === 1 ? "" : "s"} depend on it, so mistakes spread.`,
     );
-  if (m.contextTokens)
-    parts.push(`Every AI edit reads about ${k(m.contextTokens)} tokens.`);
+  if (context)
+    parts.push(`Every AI edit reads about ${k(contextTokensOf(m, context))} tokens.`);
   const worst = [...m.functions].sort(
     (a, b) => b.cognitiveComplexity - a.cognitiveComplexity,
   )[0];
@@ -95,21 +91,24 @@ export interface DecideInput {
   churn?: Churn;
   /** Afferent coupling: files that import this one. */
   ca: number;
+  /** Context load of the file (without it, payoff uses the file's own tokens). */
+  context?: ContextLoad;
   config: Config;
   settings: FileSettings;
 }
 
-export function decide({ metrics: m, findings, churn, ca, config, settings: s }: DecideInput): Decision {
-  const over = overLimits(m, s);
+export function decide(input: DecideInput): Decision {
+  const { metrics: m, findings, churn, ca, context, config, settings: s } = input;
+  const over = overLimits(m, s, context);
   const commits = churn?.commits ?? 0;
   const worst = Math.max(0, ...m.functions.map((f) => f.cognitiveComplexity));
   const payoff = Math.round(
     (commits + 1) *
-      ((m.contextTokens ?? m.fileTokens) / 1000 + worst) *
+      ((context ? contextTokensOf(m, context) : m.fileTokens) / 1000 + worst) *
       (1 + Math.log2(1 + ca) / 2),
   );
   const regressed = findings.some(isProblem);
-  const base = { payoff, overLimits: over, why: why(m, churn, ca, regressed) };
+  const base = { payoff, overLimits: over, why: why(input, regressed) };
   if (regressed)
     return { ...base, verdict: "FIX", reason: "your change made it worse" };
   if (!over.length)

@@ -1,7 +1,7 @@
 // Inline scores above functions (CodeLens) and the status bar summary.
 
 import * as vscode from "vscode";
-import { settingsFor } from "../core/config";
+import type { Limits } from "../core/config";
 import type { FunctionMetrics } from "../core/analyze";
 import type { Project } from "../core/project";
 
@@ -16,7 +16,7 @@ const cfg = () => vscode.workspace.getConfiguration("complexityLens");
 
 function label(
   fn: FunctionMetrics,
-  limits: ReturnType<typeof settingsFor>["limits"],
+  limits: Limits,
 ): string {
   const over = (v: number, l: number | null) =>
     l !== null && v > l ? " ⚠" : "";
@@ -48,7 +48,7 @@ export class ComplexityCodeLens implements vscode.CodeLensProvider {
     if (!project || !rel || !project.includes(rel)) return [];
     const metrics = project.metrics(rel, doc.getText());
     if (!metrics) return [];
-    const limits = settingsFor(project.config, rel).limits;
+    const limits = project.settings(rel).limits;
     return metrics.functions.map((fn) => {
       const range = new vscode.Range(fn.line - 1, 0, fn.line - 1, 0);
       return new vscode.CodeLens(range, {
@@ -63,7 +63,7 @@ export class ComplexityCodeLens implements vscode.CodeLensProvider {
 
 export function explain(
   fn: FunctionMetrics,
-  limits: ReturnType<typeof settingsFor>["limits"],
+  limits: Limits,
 ): void {
   const row = (name: string, v: number, l: number | null) =>
     `${name}: ${v}${l === null ? "" : ` (limit ${l})`}`;

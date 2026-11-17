@@ -85,8 +85,14 @@ export function isIncluded(config: Config, relPath: string): boolean {
   );
 }
 
-/** Effective settings for one file: top-level values, then every matching override in order. */
-export function settingsFor(config: Config, relPath: string): FileSettings {
+/** The comment that accepts a function as it is, e.g. "// complexity-ok: parser state machine". */
+export const allowCommentText = (marker: string, reason: string): string => `// ${marker}: ${reason}`;
+
+/**
+ * Effective settings for one file: top-level values, then every matching override in order.
+ * `policy`, when given, replaces every policy in the config (a one-off audit).
+ */
+export function settingsFor(config: Config, relPath: string, policy?: Policy): FileSettings {
   const out: FileSettings = {
     limits: { ...config.limits },
     policy: config.policy,
@@ -100,5 +106,6 @@ export function settingsFor(config: Config, relPath: string): FileSettings {
     Object.assign(out.hook, o.hook);
     Object.assign(out.allowComment, o.allowComment);
   }
+  if (policy) out.policy = policy;
   return out;
 }

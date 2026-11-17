@@ -6,6 +6,7 @@
 
 import type { FileMetrics, FunctionMetrics } from "./analyze";
 import type { FileSettings, LimitKey } from "./config";
+import { ContextLoad, contextTokensOf } from "./context";
 
 export type FindingStatus =
   /** New function or file that is over a limit. */
@@ -54,10 +55,10 @@ export function judgedLcom(m: FileMetrics, s: FileSettings): number {
   return Math.max(classes, mod);
 }
 
-/** Value of a file-level metric, or undefined when it can't be measured. */
-export function fileValue(m: FileMetrics, metric: FileMetric, s: FileSettings): number | undefined {
+/** Value of a file-level metric, or undefined when it can't be measured (context load without `ctx`). */
+export function fileValue(m: FileMetrics, metric: FileMetric, s: FileSettings, ctx?: ContextLoad): number | undefined {
   if (metric === "lcom") return judgedLcom(m, s);
-  if (metric === "contextTokens") return m.contextTokens;
+  if (metric === "contextTokens") return ctx && contextTokensOf(m, ctx);
   return m[metric];
 }
 
@@ -99,15 +100,15 @@ function functionFindings(path: string, fn: FunctionMetrics, prev: FunctionMetri
   return out;
 }
 
-function fileFindings(current: FileMetrics, baseline: FileMetrics | undefined, s: FileSettings): Finding[] {
+function fileFindings(current: FileMetrics, baseline: FileMetrics | undefined, s: FileSettings, ctx?: ContextLoad): Finding[] {
   const out: Finding[] = [];
   for (const m of FILE_METRICS) {
     const limit = s.limits[m];
-    const value = fileValue(current, m, s);
-    const before = baseline && fileValue(baseline, m, s);
+    const value = fileValue(current, m, s, ctx);
+    const before = baseline && fileValue(baseline, m, s, ctx);
     const status = value === undefined ? undefined : judge(value, limit, before, s.policy);
     if (status && limit !== null && value !== undefined) {
-      const hint = m === "contextTokens" ? importsDominateHint(current) : undefined;
+      const hint = m === "contextTokens" ? importsDominateHint(current, ctx) : undefined;
       out.push({ path: current.path, line: 1, metric: m, value, limit, baseline: before, status, ...(hint ? { hint } : {}) });
     }
   }
@@ -116,12 +117,13 @@ function fileFindings(current: FileMetrics, baseline: FileMetrics | undefined, s
 
 /**
  * @param baseline metrics of the same file at the baseline (undefined for a new file)
+ * @param ctx the file's context load; without it the context load is not judged
  */
-export function evaluateFile(current: FileMetrics, baseline: FileMetrics | undefined, s: FileSettings): Finding[] {
+export function evaluateFile(current: FileMetrics, baseline: FileMetrics | undefined, s: FileSettings, ctx?: ContextLoad): Finding[] {
   const before = new Map((baseline?.functions ?? []).map((f) => [f.key, f]));
   return [
     ...current.functions.flatMap((fn) => functionFindings(current.path, fn, before.get(fn.key), s)),
-    ...fileFindings(current, baseline, s),
+    ...fileFindings(current, baseline, s, ctx),
   ];
 }
 
@@ -144,7 +146,7 @@ export const HINT: Record<LimitKey, string> = {
   cyclomaticComplexity: "reduce the number of paths: fewer branches and boolean conditions, or split by case",
   functionLines: "split it into smaller functions that each do one thing",
   nestingDepth: "use early returns / guard clauses to flatten the nesting",
-  parameters: "group related parameters into an options object",
+  parameters: "pass fewer things: split the function, or pass the object the values come from",
   fileLines: "move cohesive groups of functions into their own files",
   fileTokens:
     "split the file so an agent only needs to read the part it changes",
@@ -159,9 +161,9 @@ const tok = (n: number) => (n >= 1000 ? `${Math.round(n / 100) / 10}k` : `${n}`)
  * When imports are at least half of the context load, splitting the file itself can't bring
  * it under the limit, so the advice points at the largest import instead.
  */
-export function importsDominateHint(m: FileMetrics): string | undefined {
-  const largest = m.contextLargestImport;
-  const total = m.contextTokens ?? m.fileTokens;
+export function importsDominateHint(m: FileMetrics, ctx: ContextLoad | undefined): string | undefined {
+  const largest = ctx?.imports[0];
+  const total = ctx ? contextTokensOf(m, ctx) : m.fileTokens;
   const fromImports = total - m.fileTokens;
   if (!largest || fromImports < m.fileTokens) return undefined;
   return (

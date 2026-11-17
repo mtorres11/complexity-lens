@@ -6,10 +6,13 @@ import * as path from "path";
 import { analyzeSource, FileMetrics } from "./analyze";
 import {
   Config,
+  FileSettings,
   isIncluded,
   LoadResult,
+  Policy,
   settingsFor,
 } from "./config";
+import type { ContextLoad } from "./context";
 import { resolveConfig } from "./configParse";
 import { parseJsonc } from "./jsonc";
 import { evaluateFile, Finding } from "./evaluate";
@@ -22,20 +25,20 @@ import { DiskCache } from "./diskCache";
 export const CONFIG_FILE = "complexity-lens.json";
 const MAX_CONFIG_BYTES = 256 * 1024;
 const MAX_SOURCE_BYTES = 2 * 1024 * 1024;
-const RESOLVE_EXT = [
-  ".ts",
-  ".tsx",
-  ".mts",
-  ".cts",
-  ".js",
-  ".jsx",
-  ".mjs",
-  ".cjs",
-];
+const RESOLVE_EXT = [".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"];
 
 export interface ProjectOptions {
   /** Whether git may be used (false in VS Code Restricted Mode). */
   useGit: boolean;
+  /** Judge every file with this policy instead of the repo config's (a one-off audit). */
+  policy?: Policy;
+}
+
+export interface Evaluation {
+  metrics?: FileMetrics;
+  base?: FileMetrics;
+  context?: ContextLoad;
+  findings: Finding[];
 }
 
 export class Project {
@@ -120,6 +123,11 @@ export class Project {
     return isIncluded(this.config, relPath);
   }
 
+  /** Effective settings for one file (with the policy option applied). */
+  settings(relPath: string): FileSettings {
+    return settingsFor(this.config, relPath, this.options.policy);
+  }
+
   readWorking(relPath: string): string | undefined {
     const abs = this.absolute(relPath);
     if (!abs) return undefined;
@@ -145,7 +153,7 @@ export class Project {
 
   /** Current metrics of a file: unsaved editor text if any, else disk (cached by modification time). */
   metrics(relPath: string, text?: string): FileMetrics | undefined {
-    const marker = settingsFor(this.config, relPath).allowComment.marker;
+    const marker = this.settings(relPath).allowComment.marker;
     if (text !== undefined) return analyzeSource(relPath, text, marker);
     const pending = this.overlays.get(relPath);
     if (pending !== undefined) return this.overlayMetrics(relPath, pending, marker);
@@ -189,7 +197,7 @@ export class Project {
     // Unchanged since the ref: the old version is the current one, no git read needed.
     const working = this.overlays.get(relPath) ?? this.readWorking(relPath);
     if (working !== undefined && gitBlobId(working, blob.length) === blob) return this.metrics(relPath);
-    const marker = settingsFor(this.config, relPath).allowComment.marker;
+    const marker = this.settings(relPath).allowComment.marker;
     const cached = this.disk.getBlob(blob, marker);
     if (cached) return cached;
     const text = git.blobText(this.root, blob);
@@ -199,24 +207,13 @@ export class Project {
     return metrics;
   }
 
-  evaluate(
-    relPath: string,
-    baseRef = "HEAD",
-    text?: string,
-  ): { metrics?: FileMetrics; base?: FileMetrics; findings: Finding[] } {
+  /** Metrics, baseline, context load and findings of one file. Cached metrics are never modified. */
+  evaluate(relPath: string, baseRef = "HEAD", text?: string): Evaluation {
     const metrics = this.metrics(relPath, text);
     if (!metrics) return { findings: [] };
     const base = this.baselineMetrics(relPath, baseRef);
-    // Context load: the file plus its imports. The baseline reuses today's imports.
-    const ctx = this.contextBreakdown(relPath, undefined, metrics);
-    metrics.contextTokens = ctx.total;
-    metrics.contextLargestImport = ctx.imports[0];
-    if (base) base.contextTokens = base.fileTokens + (metrics.contextTokens - metrics.fileTokens);
-    return {
-      metrics,
-      base,
-      findings: evaluateFile(metrics, base, settingsFor(this.config, relPath)),
-    };
+    const context = this.contextBreakdown(relPath, undefined, metrics);
+    return { metrics, base, context, findings: evaluateFile(metrics, base, this.settings(relPath), context) };
   }
 
   /** Included files: all of them, or only changed ones relative to `base`. */
@@ -248,7 +245,7 @@ export class Project {
    * Context load split into the file itself and the files it imports (with their sizes).
    * Imports matching tokens.ignoreImports are reported in `ignored` and not counted or followed.
    */
-  contextBreakdown(relPath: string, depth = this.config.tokens.includeImports, rootMetrics?: FileMetrics) {
+  contextBreakdown(relPath: string, depth = this.config.tokens.includeImports, rootMetrics?: FileMetrics): ContextLoad {
     const seen = new Set<string>();
     const imports: { path: string; tokens: number }[] = [];
     const ignored: string[] = [];

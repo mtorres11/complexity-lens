@@ -4,7 +4,8 @@
 import type { FileMetrics, FunctionMetrics, Increment } from "./analyze";
 import { functionAdvice, SplitSuggestion, suggestSplit } from "./advice";
 import { Churn, emptyChurn } from "./churn";
-import { FileSettings, Limits, settingsFor } from "./config";
+import type { FileSettings, Limits } from "./config";
+import { ContextLoad, contextTokensOf } from "./context";
 import { Coupling, coupling, DependentsIndex } from "./dependents";
 import { describe, evaluateFile, Finding, importsDominateHint, isProblem, judgedLcom } from "./evaluate";
 import type { Project } from "./project";
@@ -30,6 +31,8 @@ export interface FileSummary extends Decision {
   churn: Churn;
   coupling: Coupling;
   limits: Limits;
+  /** Allow-comment marker for this file, e.g. "complexity-ok". */
+  allowMarker: string;
   problems: Item[];
   notes: Item[];
 }
@@ -106,22 +109,29 @@ const toItem = (f: Finding): Item => ({
   fn: f.fn,
 });
 
-/** Current metrics, findings and baseline; unchanged files skip the git read. */
-function measured(project: Project, rel: string, ctx: InsightContext): { m?: FileMetrics; findings: Finding[]; base?: FileMetrics } {
-  if (ctx.changed && !ctx.changed.has(rel)) {
-    const m = project.metrics(rel);
-    if (!m) return { findings: [] };
-    m.contextTokens = project.aiCost(rel);
-    return { m, findings: evaluateFile(m, m, settingsFor(project.config, rel)), base: m };
-  }
-  const { metrics: m, base, findings } = project.evaluate(rel, ctx.baseRef);
-  return { m, findings, base };
+interface Measured {
+  m: FileMetrics;
+  base?: FileMetrics;
+  context: ContextLoad;
+  findings: Finding[];
+  s: FileSettings;
 }
 
-export function summarize(project: Project, rel: string, ctx: InsightContext): FileSummary | undefined {
-  const { m, findings, base } = measured(project, rel, ctx);
-  if (!m) return undefined;
-  const s = settingsFor(project.config, rel);
+/** Current metrics, baseline, context load and findings; unchanged files skip the git read. */
+function measure(project: Project, rel: string, ctx: InsightContext): Measured | undefined {
+  const s = project.settings(rel);
+  if (ctx.changed && !ctx.changed.has(rel)) {
+    const m = project.metrics(rel);
+    if (!m) return undefined;
+    const context = project.contextBreakdown(rel);
+    return { m, base: m, context, findings: evaluateFile(m, m, s, context), s };
+  }
+  const { metrics: m, base, context, findings } = project.evaluate(rel, ctx.baseRef);
+  return m && context && { m, base, context, findings, s };
+}
+
+function summaryOf(rel: string, x: Measured, project: Project, ctx: InsightContext): FileSummary {
+  const { m, base, context, findings, s } = x;
   const churn = ctx.churn.get(rel) ?? emptyChurn(13);
   const ca = ctx.dependents.get(rel)?.size ?? 0;
   const worst = [...m.functions].sort(
@@ -129,14 +139,7 @@ export function summarize(project: Project, rel: string, ctx: InsightContext): F
   )[0];
   return {
     path: rel,
-    ...decide({
-      metrics: m,
-      findings,
-      churn,
-      ca,
-      config: project.config,
-      settings: s,
-    }),
+    ...decide({ metrics: m, findings, churn, ca, context, config: project.config, settings: s }),
     cognitive: worstOf(m, "cognitiveComplexity"),
     cyclomatic: worstOf(m, "cyclomaticComplexity"),
     nesting: worstOf(m, "nestingDepth"),
@@ -144,13 +147,19 @@ export function summarize(project: Project, rel: string, ctx: InsightContext): F
     cognitiveBefore: base ? worstOf(base, "cognitiveComplexity") : undefined,
     lines: m.fileLines,
     lcom: judgedLcom(m, s),
-    contextTokens: m.contextTokens ?? m.fileTokens,
+    contextTokens: contextTokensOf(m, context),
     churn,
     coupling: coupling(ca, m.imports),
     limits: s.limits,
+    allowMarker: s.allowComment.marker,
     problems: findings.filter(isProblem).map(toItem),
     notes: findings.filter((f) => !isProblem(f)).map(toItem),
   };
+}
+
+export function summarize(project: Project, rel: string, ctx: InsightContext): FileSummary | undefined {
+  const x = measure(project, rel, ctx);
+  return x && summaryOf(rel, x, project, ctx);
 }
 
 function functionDetail(
@@ -213,15 +222,11 @@ export function detail(
   rel: string,
   ctx: InsightContext,
 ): FileDetail | undefined {
-  const summary = summarize(project, rel, ctx);
-  const m = project.metrics(rel);
-  if (!summary || !m) return undefined;
-  const s = settingsFor(project.config, rel);
-  const base = project.baselineMetrics(rel, ctx.baseRef);
+  const x = measure(project, rel, ctx);
+  if (!x) return undefined;
+  const { m, base, context, s } = x;
+  const summary = summaryOf(rel, x, project, ctx);
   const before = new Map((base?.functions ?? []).map((f) => [f.key, f]));
-  const ctxLoad = project.contextBreakdown(rel);
-  m.contextTokens = ctxLoad.total;
-  m.contextLargestImport = ctxLoad.imports[0];
   const internal = m.relativeImports
     .map((spec) => project.resolveImport(rel, spec))
     .filter((p): p is string => !!p);
@@ -239,14 +244,14 @@ export function detail(
       cyclomatic: worstOf(base, "cyclomaticComplexity"),
       nesting: worstOf(base, "nestingDepth"),
       lcom: judgedLcom(base, s),
-      contextTokens: base.fileTokens + ctxLoad.fromImports,
+      contextTokens: contextTokensOf(base, context),
     },
     context: {
-      own: ctxLoad.own,
-      fromImports: ctxLoad.fromImports,
-      imports: ctxLoad.imports.slice(0, 20),
-      ignored: ctxLoad.ignored.slice(0, 20),
-      importsAdvice: summary.overLimits.includes("contextTokens") ? importsDominateHint(m) : undefined,
+      own: context.own,
+      fromImports: context.fromImports,
+      imports: context.imports.slice(0, 20),
+      ignored: context.ignored.slice(0, 20),
+      importsAdvice: summary.overLimits.includes("contextTokens") ? importsDominateHint(m, context) : undefined,
     },
     dependents: [...(ctx.dependents.get(rel) ?? [])].sort(),
     internalImports: internal,

@@ -2,7 +2,7 @@
 
 import * as vscode from "vscode";
 import type { FileMetrics } from "../core/analyze";
-import { Limits, settingsFor } from "../core/config";
+import type { Limits } from "../core/config";
 import type { Project } from "../core/project";
 
 const tokens = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${n}`);
@@ -36,7 +36,7 @@ export class StatusBar implements vscode.Disposable {
     const t = this.target(editor);
     const m = t && editor && t.project.metrics(t.rel, editor.document.getText());
     if (!t || !m) return this.item.hide();
-    Object.assign(this.item, texts(m, settingsFor(t.project.config, t.rel).limits));
+    Object.assign(this.item, texts(m, t.project.settings(t.rel).limits));
     this.item.show();
   }
 

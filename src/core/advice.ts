@@ -48,7 +48,7 @@ const RULES: Rule[] = [
     const logical = fn.increments.filter((i) => i.kind === "&&" || i.kind === "||" || i.kind === "??").length;
     return over(fn.cyclomaticComplexity, L.cyclomaticComplexity) && logical >= 3 ? `Name the ${logical} boolean conditions as small helper functions (e.g. isEligible()).` : undefined;
   },
-  (fn, L) => (over(fn.parameters, L.parameters) ? `Group the ${fn.parameters} parameters into one options object.` : undefined),
+  (fn, L) => (over(fn.parameters, L.parameters) ? `Pass fewer than ${fn.parameters} things: split the function, or pass the object the values come from.` : undefined),
   (fn, L) => (over(fn.functionLines, L.functionLines) ? "Split it into smaller functions that each do one job." : undefined),
 ];
 

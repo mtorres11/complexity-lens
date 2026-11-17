@@ -234,7 +234,7 @@ that opens the file at that place; next to related files, a small **🔍** opens
   adds. The biggest one is marked **◀**.
 - **Calls / called by** within the file (click to jump).
 - **How to fix:** specific suggestions, e.g. *"Move lines 61–86 (the for) into its own function: about −18 cognitive"*,
-  *"Replace the switch at line 70 with a lookup table"*, *"Group the 7 parameters into one options object"*.
+  *"Replace the switch at line 70 with a lookup table"*, *"Pass fewer than 7 things: split the function, or pass the object the values come from"*.
 - **Actions:** ✨ Fix with AI · 🧹 Chore · Accept…
 
 ### Your change

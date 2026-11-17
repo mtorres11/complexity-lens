@@ -2,6 +2,7 @@
 // Plain text / Markdown with no product-specific format, so it can be pasted anywhere.
 
 import type { FileDetail, FileSummary, FunctionDetail } from "./insights";
+import { allowCommentText } from "./config";
 import { METRIC_LABEL } from "./evaluate";
 import { CHORE_SUFFIX, designNoteLines, guidance, sentence } from "./guidance";
 
@@ -165,6 +166,10 @@ export function chore(d: FileDetail, f?: FunctionDetail): string {
   return `Chore: tidy ${d.path}: ${sentence(what)}${CHORE_SUFFIX}`;
 }
 
+/** The allow comment(s) the files use, e.g. "// complexity-ok: <reason>". */
+const acceptComments = (items: FileSummary[]) =>
+  [...new Set(items.map((s) => s.allowMarker))].map((m) => `"${allowCommentText(m, "<reason>")}"`).join(" or ");
+
 export function fixAllPrompt(items: FileSummary[], extra: readonly string[] = []): string {
   const lines = items.flatMap((s) =>
     s.problems.map((p) => `- ${s.path} line ${p.line}: ${p.text}`),
@@ -175,7 +180,7 @@ export function fixAllPrompt(items: FileSummary[], extra: readonly string[] = []
     ...guidance(extra),
     RULES,
     items[0] ? limitsLine(items[0]) : "",
-    'If one is genuinely necessary, add "// complexity-ok: <reason>" above that function instead.',
+    items.length ? `If one is genuinely necessary, add ${acceptComments(items)} above that function instead.` : "",
   ]
     .filter(Boolean)
     .join("\n");
