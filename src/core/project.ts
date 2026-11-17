@@ -278,9 +278,7 @@ export class Project {
   }
 
   resolveImport(fromRel: string, spec: string): string | undefined {
-    const base = normalizePath(
-      path.posix.join(path.posix.dirname(fromRel), spec),
-    );
+    const base = normalizePath(path.posix.join(path.posix.dirname(fromRel), spec)).replace(/\/+$/, "");
     const candidates = [
       base,
       ...RESOLVE_EXT.map((e) => base + e),

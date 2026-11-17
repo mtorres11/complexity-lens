@@ -19,5 +19,5 @@ const common = {
 };
 
 await build({ ...common, entryPoints: ["src/extension.ts"], outfile: "dist/extension.js", external: ["vscode"] });
-await build({ ...common, entryPoints: ["src/cli/main.ts"], outfile: "dist/cli.js", banner: { js: "#!/usr/bin/env node\n// complexity-lens-cli" } });
+await build({ ...common, entryPoints: ["src/cli/bin.ts"], outfile: "dist/cli.js", banner: { js: "#!/usr/bin/env node\n// complexity-lens-cli" } });
 await build({ ...common, platform: "browser", format: "iife", target: "es2022", entryPoints: ["src/webview/main.ts"], outfile: "media/dist/webview.js" });

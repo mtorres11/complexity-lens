@@ -176,7 +176,9 @@
         },
         "complexityLens.fixPromptGuidelines": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "default": [],
           "scope": "resource",
           "markdownDescription": "Extra rules added to every **Fix with AI** prompt and **Ticket draft** (one rule per item), for example your repo's own conventions. Set it in the workspace settings to keep it per repo."
@@ -194,6 +196,7 @@
     "build": "node scripts/build.mjs",
     "typecheck": "tsc -p ./ --noEmit",
     "test": "tsc -p tsconfig.test.json && node --test \"out-test/test/*.test.js\"",
+    "test:coverage": "tsc -p tsconfig.test.json && node --test --experimental-test-coverage --test-coverage-lines=90 --test-coverage-branches=80 --test-coverage-functions=90 --test-coverage-include=\"out-test/src/**\" \"out-test/test/*.test.js\"",
     "selfcheck": "node dist/cli.js check --all --format text --mode warn",
     "package": "npm run typecheck && npm run build && vsce package --no-dependencies -o complexity-lens.vsix"
   },

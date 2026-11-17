@@ -8,7 +8,14 @@ import * as git from "../core/git";
 import { CONFIG_FILE, Project } from "../core/project";
 import { configTemplate } from "../core/template";
 import * as format from "./format";
-import { onFinish, postEdit, readStdin } from "./hook";
+import { onFinish, postEdit } from "./hook";
+
+/** Where the CLI reads and writes; the real process in bin.ts, buffers in tests. */
+export interface Io {
+  stdout(text: string): void;
+  stderr(text: string): void;
+  stdin(): Promise<string>;
+}
 
 const HELP = `Complexity Lens: code complexity and AI reading cost.
 
@@ -80,9 +87,9 @@ function exitCodeFor(mode: CiMode, findings: Finding[]): number {
 }
 
 /** Prints config problems; returns false when the config has errors. */
-function reportConfig(project: Project): boolean {
-  for (const w of project.loaded.warnings) process.stderr.write(`warning: ${w}\n`);
-  for (const e of project.loaded.errors) process.stderr.write(`config error: ${e}\n`);
+function reportConfig(project: Project, io: Io): boolean {
+  for (const w of project.loaded.warnings) io.stderr(`warning: ${w}\n`);
+  for (const e of project.loaded.errors) io.stderr(`config error: ${e}\n`);
   return project.loaded.errors.length === 0;
 }
 
@@ -109,21 +116,21 @@ function render(fmt: string, findings: Finding[], failed: boolean): string {
   return format.text(findings);
 }
 
-function check(args: Args): number {
+function check(args: Args, io: Io): number {
   // --policy is a one-off audit: every file is judged with it, ignoring the repo's choice.
   const project = openProject(args, flag(args, "--policy", ["ratchet", "absolute"]) as Policy | undefined);
-  if (!reportConfig(project)) return 2;
+  if (!reportConfig(project, io)) return 2;
   const { base, fmt, mode } = checkOptions(args, project);
   if (mode === "off") return 0;
   const baseRef = base === "HEAD" ? "HEAD" : git.mergeBase(project.root, base);
   const findings = filesToCheck(args, project, base).flatMap((f) => project.evaluate(f, baseRef).findings);
   const code = exitCodeFor(mode, findings);
   const out = render(fmt, findings, code !== 0);
-  if (out) process.stdout.write(out + "\n");
+  if (out) io.stdout(out + "\n");
   return code;
 }
 
-function init(args: Args): number {
+function init(args: Args, io: Io): number {
   const preset = (flag(args, "--preset", [
     "relaxed",
     "recommended",
@@ -132,52 +139,49 @@ function init(args: Args): number {
   const project = openProject(args);
   const file = path.join(project.root, CONFIG_FILE);
   if (fs.existsSync(file)) {
-    process.stderr.write(`${CONFIG_FILE} already exists; not overwritten.\n`);
+    io.stderr(`${CONFIG_FILE} already exists; not overwritten.\n`);
     return 2;
   }
   fs.writeFileSync(file, configTemplate(preset), { flag: "wx" });
-  process.stdout.write(`Created ${file} (preset: ${preset}).\n`);
+  io.stdout(`Created ${file} (preset: ${preset}).\n`);
   return 0;
 }
 
-async function hook(args: Args): Promise<number> {
+async function hook(args: Args, io: Io): Promise<number> {
   const event = args.positional[1];
   if (event !== "post-edit" && event !== "stop")
     throw new UsageError('hook needs "post-edit" or "stop"');
   try {
-    const raw = await readStdin();
+    const raw = await io.stdin();
     const input = raw.trim() ? JSON.parse(raw) : {};
     const result = event === "post-edit" ? postEdit(input) : onFinish(input);
-    if (result) process.stdout.write(JSON.stringify(result));
+    if (result) io.stdout(JSON.stringify(result));
   } catch {
     // Fail open: never block the agent because of a problem in the hook itself.
   }
   return 0;
 }
 
-async function main(argv: string[]): Promise<number> {
+async function dispatch(argv: string[], io: Io): Promise<number> {
   const args = parseArgs(argv);
   const cmd = args.positional[0];
   if (!cmd || cmd === "help" || args.flags.has("--help")) {
-    process.stdout.write(HELP);
+    io.stdout(HELP);
     return 0;
   }
   if (cmd === "check")
-    return check({ ...args, positional: args.positional.slice(1) });
-  if (cmd === "hook") return hook(args);
-  if (cmd === "init") return init(args);
+    return check({ ...args, positional: args.positional.slice(1) }, io);
+  if (cmd === "hook") return hook(args, io);
+  if (cmd === "init") return init(args, io);
   throw new UsageError(`unknown command "${cmd}"`);
 }
 
-// Set exitCode instead of calling process.exit(), so large outputs to a pipe are fully flushed.
-main(process.argv.slice(2)).then(
-  (code) => {
-    process.exitCode = code;
-  },
-  (e) => {
-    process.stderr.write(
-      `complexity-lens: ${(e as Error).message}\n${e instanceof UsageError ? "Run 'complexity-lens help'.\n" : ""}`,
-    );
-    process.exitCode = 2;
-  },
-);
+/** Runs one command and returns its exit code: 0 = pass, 1 = failed (per ci.mode), 2 = usage or config error. */
+export async function run(argv: string[], io: Io): Promise<number> {
+  try {
+    return await dispatch(argv, io);
+  } catch (e) {
+    io.stderr(`complexity-lens: ${(e as Error).message}\n${e instanceof UsageError ? "Run 'complexity-lens help'.\n" : ""}`);
+    return 2;
+  }
+}
