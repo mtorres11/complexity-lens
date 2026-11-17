@@ -2,7 +2,8 @@
 // Plain JSON so the webview, the CLI and future integrations can all use them.
 
 import type { FileMetrics, FunctionMetrics, Increment } from "./analyze";
-import { functionAdvice, SplitSuggestion, suggestSplit } from "./advice";
+import { functionAdvice } from "./advice";
+import { SplitSuggestion, suggestSplit } from "./split";
 import { Churn, emptyChurn } from "./churn";
 import type { Config, FileSettings, Limits } from "./config";
 import { ContextLoad, contextTokensOf } from "./context";

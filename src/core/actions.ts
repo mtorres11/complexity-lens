@@ -103,7 +103,8 @@ function approachLines(d: FileDetail): string[] {
 function criteriaLines(d: FileDetail): string[] {
   const L = d.limits;
   const lines: string[] = [];
-  if (L.cognitiveComplexity !== null) lines.push(`- No function over cognitive ${L.cognitiveComplexity}${L.nestingDepth !== null ? ` or nesting ${L.nestingDepth}` : ""}.`);
+  const fnLimits = FUNCTION_METRICS.flatMap((m) => (L[m.key] === null ? [] : [`${m.short} ≤ ${L[m.key]}`]));
+  if (fnLimits.length) lines.push(`- Every function within: ${fnLimits.join(", ")}.`);
   if (L.fileTokens !== null) lines.push(`- Each resulting file ≤ ${k(L.fileTokens)} tokens.`);
   lines.push(
     "- No duplicated logic or data introduced; each decision on a type/kind/mode lives in one place.",

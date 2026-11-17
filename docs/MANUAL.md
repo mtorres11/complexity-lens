@@ -221,7 +221,7 @@ The summary then reads *N of M file(s)*. **Clear filters** shows everything agai
 | **Churn** | Commits, lines added/removed, authors, last change, and a weekly sparkline |
 | **Coupling** | **Used by**: files that import it. **Uses**: files and packages it imports. Click a file to open *its* deep analysis. |
 | **Functions** | Worst first, with cognitive, cyclomatic, lines and nesting. Click one for its own screen. |
-| **Suggested split** | When the file is big and has unrelated groups: which functions go in which new file, and the tokens saved per edit |
+| **Suggested split** | When the file is big and has unrelated groups: which functions go in which new file, and the tokens saved per edit. A file named like `name.role.ts` gets parts named `name.<word>.ts`. Groups about the same subject become one file, and a small declaration with no connections joins the group whose names share the most words with it, or stays in the file, instead of getting a file of its own |
 | **Actions** | ✨ Fix with AI · 🎫 Ticket draft · 🧹 Chore · Accept… · Ignore |
 
 Use **← Back** and the breadcrumb (`Project › file › function`) to move around. Every file path and line number is a link
@@ -263,7 +263,7 @@ and **Ignore** (the file name opens the file). At the bottom: **🎫 Ticket draf
 | Action | Produces |
 | --- | --- |
 | **✨ Fix with AI** | A short progress note while it's prepared, then *“Fix prompt copied to the clipboard. Paste it into your AI agent.”* The prompt contains: the file or function, the exact problem and numbers, where the complexity is, the suggested fix, the design rules (*fix the design, don't just move code; DRY, KISS, YAGNI; decide once outside loops and don't re-parse in loops or comparators; don't game the limits with one-use wrappers or parameter objects; state the plan first; pin behaviour with tests if coverage is missing*), any extra rules from `complexityLens.fixPromptGuidelines`, and the rules (*don't change behaviour, keep tests passing, no new dependencies, end within the limits*). Copied to the clipboard. |
-| **🎫 Ticket draft** | A Markdown ticket: title, problem (with the numbers), proposed approach (including the split), design notes (the same design rules, plus `complexityLens.fixPromptGuidelines`), acceptance criteria (limits, no duplicated logic, loop-invariant decisions hoisted, total complexity down, behaviour proven by tests), and a size. **Copy to clipboard** or **Save as Markdown file…** |
+| **🎫 Ticket draft** | A Markdown ticket: title, problem (with the numbers), proposed approach (including the split), design notes (the same design rules, plus `complexityLens.fixPromptGuidelines`), acceptance criteria (every function limit, no duplicated logic, loop-invariant decisions hoisted, total complexity down, behaviour proven by tests), and a size. **Copy to clipboard** or **Save as Markdown file…** |
 | **🧹 Chore** | A one-line chore for small cleanups, ending with a short reminder (*keep it DRY and simple, decide once outside loops, no behaviour change*). Copied to the clipboard. |
 | **Accept…** | Asks for a reason, then adds `// complexity-ok: <reason>` above the function (with the file's own `allowComment.marker` when the config changes it, including per-folder overrides). |
 | **Ignore** | Hides the file from *What to fix* on this machine. |

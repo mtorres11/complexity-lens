@@ -12,7 +12,8 @@ import { globToRegExp, matchesAny } from "../src/core/glob";
 import { parseChurn } from "../src/core/churn";
 import { buildDependents, coupling } from "../src/core/dependents";
 import { decide } from "../src/core/verdict";
-import { functionAdvice, suggestSplit } from "../src/core/advice";
+import { functionAdvice } from "../src/core/advice";
+import { suggestSplit } from "../src/core/split";
 import { isSafeRef } from "../src/node/git";
 
 const cc = (src: string, name: string) => {
@@ -308,6 +309,39 @@ test("split suggestion from cohesion groups, with token savings", () => {
   assert.equal(split.parts.length, 2);
   assert.ok(split.parts.some((p) => p.file === "order.ts" || p.file === "parse.ts"));
   assert.ok(split.savesTokens > 0);
+});
+
+test("split: parts follow a name.role.ts pattern; small one-member groups join the related group or stay in the file", () => {
+  const body = (n: string) => `export function ${n}() {\n${"  const x = 1;\n".repeat(60)}  return x;\n}\n`;
+  const src =
+    body("parseOrder") +
+    body("parseOrderLine").replace("return x;", "return parseOrder();") +
+    body("renderInvoice") +
+    body("renderInvoiceLine").replace("return x;", "return renderInvoice();") +
+    "export function parseOrderTotal() {\n  return 1;\n}\n" +
+    "export function clampValue() {\n  return 2;\n}\n";
+  const m = analyzeSource("billing.tool.ts", src);
+  const split = suggestSplit(m, settingsFor(defaultConfig("strict"), "billing.tool.ts"));
+  assert.ok(split, "a split is suggested");
+  assert.equal(split.parts.length, 2, "parseOrderTotal joins the order group instead of its own file");
+  assert.ok(split.parts.every((p) => p.file.startsWith("billing.") && p.file.endsWith(".ts")));
+  const order = split.parts.find((p) => p.members.includes("parseOrder"));
+  assert.ok(order?.members.includes("parseOrderTotal"));
+  assert.ok(!split.parts.some((p) => p.members.includes("clampValue")), "a small unrelated helper stays in the file");
+});
+
+test("boolean-condition advice asks for a lookup, not one-use helpers", () => {
+  const src = `function f(k: string) {
+    if (k === "a" || k === "b" || k === "c" || k === "d") return 1;
+    if (k === "e" || k === "f" || k === "g") return 2;
+    if (k === "h" || k === "i" || k === "j") return 3;
+    if (k === "l" || k === "m" || k === "n") return 4;
+    if (k === "o" || k === "p" || k === "q") return 5;
+    return 0;
+  }`;
+  const advice = functionAdvice(cc(src, "f"), settingsFor(defaultConfig("strict"), "a.ts")).join(" ");
+  assert.ok(/lookup/.test(advice), advice);
+  assert.ok(!/isEligible|small helper functions/.test(advice));
 });
 
 test("function advice points at the block to extract", () => {
