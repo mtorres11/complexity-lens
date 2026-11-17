@@ -70,7 +70,7 @@ test("describe tags each status and shows the change from the baseline", () => {
 
 test("judged LCOM: classes always count; the module only from half the file-line limit", () => {
   const m = (fileLines: number): FileMetrics => ({
-    path: "a.ts", fileLines, fileTokens: 1, imports: 0, relativeImports: [], lcom: 3, functions: [],
+    path: "a.ts", fileLines, fileTokens: 1, imports: 0, relativeImports: [], functions: [],
     cohesion: [{ scope: "module", name: "(module)", lcom: 3, groups: [] }, { scope: "class", name: "C", lcom: 2, groups: [] }],
   });
   assert.equal(judgedLcom(m(199), s), 2, "small file: only the class counts");

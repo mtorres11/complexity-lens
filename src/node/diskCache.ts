@@ -15,7 +15,7 @@ const MAX_ENTRIES = 50_000;
 const SAVE_DELAY_MS = 2_000;
 
 /** Changes with every build, so analyzer changes never reuse old results. Tests and dev builds use "dev". */
-export const BUILD_ID = process.env.CL_BUILD || "dev";
+const BUILD_ID = process.env.CL_BUILD || "dev";
 
 interface FileEntry {
   mtimeMs: number;

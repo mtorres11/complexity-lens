@@ -4,7 +4,7 @@ Thanks for helping! This repo accepts changes through pull requests only.
 
 1. Fork the repo and create a branch.
 2. `npm install`, then `npm run build` and press **F5** in VS Code to try your change.
-3. Make sure `npm test`, `npm run selfcheck` and `npm run package` succeed.
+3. Make sure `npm test`, `npm run test:coverage`, `npm run selfcheck` and `npm run package` succeed.
 4. Open a pull request describing what changed and why.
 
 Every pull request needs the maintainer's approval before it can be merged,

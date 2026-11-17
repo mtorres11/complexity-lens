@@ -11,7 +11,7 @@ import { fixCommits, matchesFilter, state } from "./state";
 
 const METRIC_OPTIONS: [LimitKey | "", string][] = [["", "Any metric"], ...METRICS.map((m): [LimitKey, string] => [m.key, m.title])];
 
-export const reportFilter: {
+const reportFilter: {
   hidden: Set<Verdict>;
   metric: LimitKey | "";
   hotspots: boolean;

@@ -216,7 +216,7 @@ export class Project implements ProjectReader {
     const metrics = this.metrics(relPath, text);
     if (!metrics) return { findings: [] };
     const base = this.baselineMetrics(relPath, baseRef);
-    const context = this.contextBreakdown(relPath, undefined, metrics);
+    const context = this.contextBreakdown(relPath, metrics);
     return { metrics, base, context, findings: evaluateFile(metrics, base, this.settings(relPath), context) };
   }
 
@@ -238,18 +238,12 @@ export class Project implements ProjectReader {
   }
 
   /**
-   * Estimated tokens to read a file plus its relative imports, `depth` levels deep.
-   * `rootMetrics` lets the editor pass metrics for unsaved text of the root file.
+   * Context load split into the file itself and the files it imports (with their sizes),
+   * tokens.includeImports levels deep. Imports matching tokens.ignoreImports are reported in
+   * `ignored` and not counted or followed. `rootMetrics` are the file's metrics when the caller has them.
    */
-  aiCost(relPath: string, depth = this.config.tokens.includeImports, rootMetrics?: FileMetrics): number {
-    return this.contextBreakdown(relPath, depth, rootMetrics).total;
-  }
-
-  /**
-   * Context load split into the file itself and the files it imports (with their sizes).
-   * Imports matching tokens.ignoreImports are reported in `ignored` and not counted or followed.
-   */
-  contextBreakdown(relPath: string, depth = this.config.tokens.includeImports, rootMetrics?: FileMetrics): ContextLoad {
+  contextBreakdown(relPath: string, rootMetrics?: FileMetrics): ContextLoad {
+    const depth = this.config.tokens.includeImports;
     const seen = new Set<string>();
     const imports: { path: string; tokens: number }[] = [];
     const ignored: string[] = [];
@@ -328,15 +322,6 @@ export class Project implements ProjectReader {
   /** Reverse import index over the given files (uses cached metrics). */
   dependents(files: readonly string[]): DependentsIndex {
     return buildDependents(files, (rel) => this.metrics(rel)?.relativeImports, (from, spec) => this.resolveImport(from, spec));
-  }
-
-  hotspotCounts(): Map<string, number> {
-    if (!this.options.useGit) return new Map();
-    try {
-      return git.commitCounts(this.root, this.config.hotspots.historyDays);
-    } catch {
-      return new Map();
-    }
   }
 }
 

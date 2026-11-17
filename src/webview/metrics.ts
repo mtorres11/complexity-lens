@@ -5,7 +5,7 @@ import { isOver, Metric } from "../core/limits";
 import { bar, box, h } from "./dom";
 
 /** A value as shown: tokens as ≈1.2k, LCOM 0 (nothing to judge) as "–", the rest as numbers. */
-export function metricText(m: Metric, v: number): string {
+function metricText(m: Metric, v: number): string {
   if (m.unit === "tokens") return `≈${formatTokens(v)}`;
   return m.key === "lcom" && !v ? "–" : `${v}`;
 }

@@ -9,7 +9,7 @@ const CLI_MARKER = "complexity-lens-cli";
 /** The CLI copy lives at ~/.complexity-lens/cli.js. */
 const SHIM_DIR = ".complexity-lens";
 const SHIM_FILE = "cli.js";
-export const shimDir = () => path.join(os.homedir(), SHIM_DIR);
+const shimDir = () => path.join(os.homedir(), SHIM_DIR);
 export const shimPath = () => path.join(shimDir(), SHIM_FILE);
 
 // The same file through $HOME, so the settings work for every teammate. Guarded so teammates

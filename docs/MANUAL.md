@@ -198,7 +198,7 @@ Repo   [ Rules… ]  [ Agent hook… ]
 | Filter | Shows |
 | --- | --- |
 | **Verdict chips** `FIX 53 · PLAN 100 · LEAVE 100 · OK 1889` | Click a chip to hide or show that verdict (the numbers are counts) |
-| **Over:** *any metric* or one of cognitive, cyclomatic, nesting, function length, parameters, file lines, file tokens, coupling, cohesion, context load | Only files over that limit |
+| **Over:** *any metric* or one of cognitive, cyclomatic, function length, nesting, parameters, file lines, file tokens, coupling, cohesion, context load | Only files over that limit |
 | **Hotspots only** | Files changed at least `verdicts.fixCommits` times recently |
 | **Problems only** | Files your current changes made worse |
 | **Search** 🔎 | Files whose path contains the text |
@@ -265,7 +265,7 @@ and **Ignore** (the file name opens the file). At the bottom: **🎫 Ticket draf
 | **✨ Fix with AI** | A short progress note while it's prepared, then *“Fix prompt copied to the clipboard. Paste it into your AI agent.”* The prompt contains: the file or function, the exact problem and numbers, where the complexity is, the suggested fix, the design rules (*fix the design, don't just move code; DRY, KISS, YAGNI; decide once outside loops and don't re-parse in loops or comparators; don't game the limits with one-use wrappers or parameter objects; state the plan first; pin behaviour with tests if coverage is missing*), any extra rules from `complexityLens.fixPromptGuidelines`, and the rules (*don't change behaviour, keep tests passing, no new dependencies, end within the limits*). Copied to the clipboard. |
 | **🎫 Ticket draft** | A Markdown ticket: title, problem (with the numbers), proposed approach (including the split), design notes (the same design rules, plus `complexityLens.fixPromptGuidelines`), acceptance criteria (limits, no duplicated logic, loop-invariant decisions hoisted, total complexity down, behaviour proven by tests), and a size. **Copy to clipboard** or **Save as Markdown file…** |
 | **🧹 Chore** | A one-line chore for small cleanups, ending with a short reminder (*keep it DRY and simple, decide once outside loops, no behaviour change*). Copied to the clipboard. |
-| **Accept…** | Asks for a reason, then adds `// complexity-ok: <reason>` above the function. |
+| **Accept…** | Asks for a reason, then adds `// complexity-ok: <reason>` above the function (with the file's own `allowComment.marker` when the config changes it, including per-folder overrides). |
 | **Ignore** | Hides the file from *What to fix* on this machine. |
 
 ### Notices
@@ -576,7 +576,7 @@ function parse(input: string) { … }
 - The comment must be **directly above** the function.
 - With `requireReason: true` (default), a reason must follow the marker, so reviewers see *why*.
 - Accepted functions still appear in the sidebar marked **✓**, but never block the hook or CI.
-- Change the marker word with `allowComment.marker` (3–40 lowercase letters, digits or hyphens).
+- Change the marker word with `allowComment.marker` (3–40 lowercase letters, digits or hyphens), for the whole repo or per folder in `overrides`. **Accept…**, the agent hook and the fix-all prompt all use the marker that applies to each file.
 
 ---
 

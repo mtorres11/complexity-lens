@@ -12,7 +12,7 @@ function weight(inc: Increment, all: Increment[]): number {
 }
 
 /** The block worth extracting: the biggest nested chunk that isn't the whole function. */
-export function hottestBlock(
+function hottestBlock(
   fn: FunctionMetrics,
 ): { inc: Increment; points: number } | undefined {
   let best: { inc: Increment; points: number } | undefined;

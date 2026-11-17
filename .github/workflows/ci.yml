@@ -19,7 +19,7 @@ jobs:
           cache: npm
       - run: npm ci --ignore-scripts
       - run: npm run typecheck
-      - run: npm test
+      - run: npm run test:coverage
       - run: npm run build
       - name: Complexity Lens checks itself
         run: node dist/cli.js check --all --policy absolute --mode failOverLimit --format github

@@ -114,7 +114,6 @@ const fileWith = (complexity: number): FileMetrics => ({
   fileTokens: 10,
   imports: 0,
   relativeImports: [],
-  lcom: 0,
   cohesion: [],
   functions: [
     {

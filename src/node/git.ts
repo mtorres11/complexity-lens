@@ -23,7 +23,7 @@ const SAFE_FLAGS = [
 
 const REF_RE = /^(?!-)[A-Za-z0-9._\/@~^{}-]{1,200}$/;
 
-export class GitError extends Error {}
+class GitError extends Error {}
 
 export function isSafeRef(ref: string): boolean {
   return REF_RE.test(ref) && !ref.includes("..");
@@ -159,21 +159,6 @@ export function changedFiles(root: string, base = "HEAD"): string[] {
 export function mergeBase(root: string, base: string): string {
   if (!isSafeRef(base)) throw new GitError(`Unsafe git ref: ${base}`);
   return git(root, ["merge-base", base, "HEAD"]).trim();
-}
-
-/** How many commits touched each file in the last `days` days. */
-export function commitCounts(root: string, days: number): Map<string, number> {
-  const counts = new Map<string, number>();
-  if (!hasCommit(root, "HEAD")) return counts;
-  const out = git(root, [
-    "log",
-    `--since=${Math.max(1, Math.floor(days))}.days`,
-    "--name-only",
-    "--format=",
-    "--no-renames",
-  ]);
-  for (const f of lines(out)) counts.set(f, (counts.get(f) ?? 0) + 1);
-  return counts;
 }
 
 /**

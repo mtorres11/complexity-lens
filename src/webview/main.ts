@@ -168,15 +168,9 @@ function footer(): HTMLElement {
   return h(
     "div",
     { class: "footer muted" },
-    `Created by ${a?.author || "Marco Torres C"}`,
-    a?.hasRepo ? " · " : null,
-    a?.hasRepo
-      ? link(
-          "GitHub",
-          { type: "openRepo" },
-          { title: "Open the source repository" },
-        )
-      : null,
+    a?.author ? `Created by ${a.author}` : null,
+    a?.author && a.hasRepo ? " · " : null,
+    a?.hasRepo ? link("GitHub", { type: "openRepo" }, { title: "Open the source repository" }) : null,
     a?.version ? ` · v${a.version}` : null,
     " · local only, no telemetry",
   );

@@ -12,7 +12,6 @@ import { countImports, FnNode, isFunctionNode, ownName, simpleName } from "./nam
 import { estimateTokens } from "./tokens";
 import { FunctionWalker, Increment } from "./walker";
 
-export { estimateTokens } from "./tokens";
 export type { Increment } from "./walker";
 export type { Cohesion, CohesionGroup } from "./cohesion";
 
@@ -45,13 +44,11 @@ export interface FileMetrics {
   imports: number;
   /** Module specifiers of relative imports, used for AI cost and afferent coupling. */
   relativeImports: string[];
-  /** Highest LCOM among the module and its classes (1 = cohesive, 0 = nothing to judge). */
-  lcom: number;
   cohesion: Cohesion[];
   functions: FunctionMetrics[];
 }
 
-export function scriptKindFor(path: string): ts.ScriptKind {
+function scriptKindFor(path: string): ts.ScriptKind {
   if (/\.tsx$/i.test(path)) return ts.ScriptKind.TSX;
   if (/\.jsx$/i.test(path)) return ts.ScriptKind.JSX;
   if (/\.[mc]?js$/i.test(path)) return ts.ScriptKind.JS;
@@ -188,7 +185,6 @@ export function analyzeSource(
     fileTokens: estimateTokens(text),
     imports: imports.count,
     relativeImports: imports.relative,
-    lcom: Math.max(0, ...cohesion.map((c) => c.lcom)),
     cohesion,
     functions,
   };

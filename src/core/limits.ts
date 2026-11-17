@@ -23,7 +23,7 @@ export const METRICS = [
 
 export type Metric = (typeof METRICS)[number];
 export type LimitKey = Metric["key"];
-export type FunctionMetric = Extract<Metric, { scope: "function" }>;
+type FunctionMetric = Extract<Metric, { scope: "function" }>;
 export type FunctionMetricKey = FunctionMetric["key"];
 export type FileMetricKey = Extract<Metric, { scope: "file" }>["key"];
 

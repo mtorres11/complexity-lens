@@ -118,11 +118,17 @@ Details: [SECURITY.md](SECURITY.md) and [docs/SECURITY_ASSESSMENT.md](docs/SECUR
 
 ```
 npm install
-npm test            # unit + end-to-end hook tests
-npm run build       # dist/extension.js and dist/cli.js
-npm run selfcheck   # Complexity Lens checking itself
-npm run package     # complexity-lens.vsix
+npm test                # unit, end-to-end (git, CLI, hook) and layering tests
+npm run test:coverage   # the same with a coverage gate: 90% lines, 80% branches, 90% functions
+npm run build           # dist/extension.js, dist/cli.js and media/dist/webview.js
+npm run selfcheck       # Complexity Lens checking itself
+npm run package         # complexity-lens.vsix
 ```
+
+Source layout: `src/core` (pure analysis, rules and texts, no Node APIs), `src/node` (files, git,
+caches, hook setup), `src/app` (the sidebar's host-neutral logic), `src/shared` (panel messages),
+`src/cli`, `src/webview` (the panel page), and `src/vscode` + `src/extension.ts` (the only code that
+uses the VS Code API). Tests in `test/` enforce these boundaries.
 
 Contributions are welcome through pull requests; see [CONTRIBUTING.md](CONTRIBUTING.md).
 

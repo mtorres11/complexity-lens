@@ -24,7 +24,7 @@ export const VERDICT_TEXT: Record<Verdict, { reason: string; meaning: string }> 
   OK: { reason: "within the limits", meaning: "within the limits" },
 };
 /** The FIX reason when the current change made the file worse. */
-export const REGRESSED_REASON = "your change made it worse";
+const REGRESSED_REASON = "your change made it worse";
 
 export interface Decision {
   verdict: Verdict;

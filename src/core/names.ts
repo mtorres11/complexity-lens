@@ -13,7 +13,7 @@ export const isFunctionNode = (n: ts.Node): n is FnNode =>
   ts.isFunctionExpression(n) ||
   ts.isArrowFunction(n);
 
-export function propName(name: ts.PropertyName | ts.BindingName | undefined): string | undefined {
+function propName(name: ts.PropertyName | ts.BindingName | undefined): string | undefined {
   if (!name) return undefined;
   if (ts.isIdentifier(name) || ts.isPrivateIdentifier(name)) return name.text;
   if (ts.isStringLiteral(name) || ts.isNumericLiteral(name)) return name.text;
@@ -21,7 +21,7 @@ export function propName(name: ts.PropertyName | ts.BindingName | undefined): st
 }
 
 /** The class a function belongs to directly (not through an enclosing function). */
-export function enclosingClass(n: ts.Node): ts.ClassLikeDeclaration | undefined {
+function enclosingClass(n: ts.Node): ts.ClassLikeDeclaration | undefined {
   for (let p = n.parent; p; p = p.parent) {
     if (ts.isClassLike(p)) return p;
     if (isFunctionNode(p)) return undefined;
