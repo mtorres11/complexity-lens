@@ -107,15 +107,16 @@ export class DataBuilder {
   ): Promise<{ data: ViewData; truncated: boolean } | undefined> {
     const c = await this.context(p);
     if (!c) return undefined;
+    const changed = this.project.files("changed");
     const files =
       scope === "repo"
         ? c.files
         : scope === "changed"
-          ? this.project.files("changed")
+          ? changed
           : currentFile && this.project.includes(currentFile)
             ? [currentFile]
             : [];
-    const rows = await this.summaries(files, { ...c.ctx, baseRef: "HEAD", changed: new Set(this.project.files("changed")) }, p);
+    const rows = await this.summaries(files, { ...c.ctx, baseRef: "HEAD", changed: new Set(changed) }, p);
     return (
       rows && {
         data: { report: rows.sort(SORTERS[sort]) },

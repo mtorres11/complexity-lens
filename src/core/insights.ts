@@ -114,8 +114,8 @@ function measured(project: Project, rel: string, ctx: InsightContext): { m?: Fil
     m.contextTokens = project.aiCost(rel);
     return { m, findings: evaluateFile(m, m, settingsFor(project.config, rel)), base: m };
   }
-  const { metrics: m, findings } = project.evaluate(rel, ctx.baseRef);
-  return { m, findings, base: m && project.baselineMetrics(rel, ctx.baseRef) };
+  const { metrics: m, base, findings } = project.evaluate(rel, ctx.baseRef);
+  return { m, findings, base };
 }
 
 export function summarize(project: Project, rel: string, ctx: InsightContext): FileSummary | undefined {

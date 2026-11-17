@@ -1,5 +1,6 @@
 // Ties config, git and the analyzer together for one repository.
 
+import { createHash } from "crypto";
 import * as fs from "fs";
 import * as path from "path";
 import { analyzeSource, FileMetrics } from "./analyze";
@@ -16,6 +17,7 @@ import * as git from "./git";
 import { Churn, parseChurn } from "./churn";
 import { buildDependents, DependentsIndex } from "./dependents";
 import { matchesAny, normalizePath } from "./glob";
+import { DiskCache } from "./diskCache";
 
 export const CONFIG_FILE = "complexity-lens.json";
 const MAX_CONFIG_BYTES = 256 * 1024;
@@ -38,18 +40,50 @@ export interface ProjectOptions {
 
 export class Project {
   readonly loaded: LoadResult;
-  private readonly refCache = new Map<string, { at: number; ok: boolean }>();
+  private readonly refCache = new Map<string, { at: number; commit?: string }>();
+  private readonly trees = new Map<string, Map<string, string>>();
+  private diskCache?: DiskCache;
 
-  /** Whether a ref resolves, remembered for a few seconds. */
-  private refExists(ref: string): boolean {
+  /** Commit a ref points at (undefined if it does not resolve), remembered for a few seconds. */
+  private commitOf(ref: string): string | undefined {
     const hit = this.refCache.get(ref);
-    if (hit && Date.now() - hit.at < 5_000) return hit.ok;
-    const ok = git.hasCommit(this.root, ref);
-    this.refCache.set(ref, { at: Date.now(), ok });
-    return ok;
+    if (hit && Date.now() - hit.at < 5_000) return hit.commit;
+    const commit = git.resolveCommit(this.root, ref);
+    this.refCache.set(ref, { at: Date.now(), commit });
+    return commit;
   }
 
-  private churnCache?: { at: number; map: Map<string, Churn> };
+  /** Path → blob id for a commit, from one git call (the last few commits are kept). */
+  private tree(commit: string): Map<string, string> {
+    let t = this.trees.get(commit);
+    if (!t) {
+      t = git.treeBlobs(this.root, commit);
+      if (this.trees.size >= 4) this.trees.delete(this.trees.keys().next().value as string);
+      this.trees.set(commit, t);
+    }
+    return t;
+  }
+
+  /** On-disk cache in the git directory; memory only when git is off or this is not a repository. */
+  private get disk(): DiskCache {
+    if (!this.diskCache) {
+      let dir: string | undefined;
+      try {
+        dir = this.options.useGit ? path.join(git.gitDir(this.root), "complexity-lens") : undefined;
+      } catch {
+        dir = undefined;
+      }
+      this.diskCache = new DiskCache(dir);
+    }
+    return this.diskCache;
+  }
+
+  /** Writes the on-disk cache now (it is also saved shortly after changes and when the process exits). */
+  saveCache(): void {
+    this.diskCache?.save();
+  }
+
+  private churnCache?: { key: string; map: Map<string, Churn> };
   private readonly cache = new Map<
     string,
     { mtimeMs: number; metrics: FileMetrics }
@@ -117,18 +151,24 @@ export class Project {
     if (pending !== undefined) return this.overlayMetrics(relPath, pending, marker);
     const abs = this.absolute(relPath);
     if (!abs) return undefined;
-    let mtimeMs = 0;
+    let st: fs.Stats;
     try {
-      mtimeMs = fs.statSync(abs).mtimeMs;
+      st = fs.statSync(abs);
     } catch {
       return undefined;
     }
     const hit = this.cache.get(relPath);
-    if (hit && hit.mtimeMs === mtimeMs) return hit.metrics;
+    if (hit && hit.mtimeMs === st.mtimeMs) return hit.metrics;
+    const stored = this.disk.getFile(relPath, st.mtimeMs, st.size, marker);
+    if (stored) {
+      this.cache.set(relPath, { mtimeMs: st.mtimeMs, metrics: stored });
+      return stored;
+    }
     const src = this.readWorking(relPath);
     if (src === undefined) return undefined;
     const metrics = analyzeSource(relPath, src, marker);
-    this.cache.set(relPath, { mtimeMs, metrics });
+    this.cache.set(relPath, { mtimeMs: st.mtimeMs, metrics });
+    this.disk.setFile(relPath, st.mtimeMs, st.size, marker, metrics);
     return metrics;
   }
 
@@ -142,21 +182,28 @@ export class Project {
 
   /** Metrics of the file at a git ref, or undefined if it did not exist (or git is off). */
   baselineMetrics(relPath: string, ref = "HEAD"): FileMetrics | undefined {
-    if (!this.options.useGit || !this.refExists(ref)) return undefined;
-    const text = git.fileAt(this.root, ref, relPath);
+    if (!this.options.useGit) return undefined;
+    const commit = this.commitOf(ref);
+    const blob = commit && this.tree(commit).get(relPath);
+    if (!blob) return undefined;
+    // Unchanged since the ref: the old version is the current one, no git read needed.
+    const working = this.overlays.get(relPath) ?? this.readWorking(relPath);
+    if (working !== undefined && gitBlobId(working, blob.length) === blob) return this.metrics(relPath);
+    const marker = settingsFor(this.config, relPath).allowComment.marker;
+    const cached = this.disk.getBlob(blob, marker);
+    if (cached) return cached;
+    const text = git.blobText(this.root, blob);
     if (text === undefined || text.length > MAX_SOURCE_BYTES) return undefined;
-    return analyzeSource(
-      relPath,
-      text,
-      settingsFor(this.config, relPath).allowComment.marker,
-    );
+    const metrics = analyzeSource(relPath, text, marker);
+    this.disk.setBlob(blob, marker, metrics);
+    return metrics;
   }
 
   evaluate(
     relPath: string,
     baseRef = "HEAD",
     text?: string,
-  ): { metrics?: FileMetrics; findings: Finding[] } {
+  ): { metrics?: FileMetrics; base?: FileMetrics; findings: Finding[] } {
     const metrics = this.metrics(relPath, text);
     if (!metrics) return { findings: [] };
     const base = this.baselineMetrics(relPath, baseRef);
@@ -167,6 +214,7 @@ export class Project {
     if (base) base.contextTokens = base.fileTokens + (metrics.contextTokens - metrics.fileTokens);
     return {
       metrics,
+      base,
       findings: evaluateFile(metrics, base, settingsFor(this.config, relPath)),
     };
   }
@@ -258,17 +306,23 @@ export class Project {
     return undefined;
   }
 
-  /** Churn per file over hotspots.historyDays (cached for a minute). */
+  /** Churn per file over hotspots.historyDays, recomputed only when HEAD or the day changes. */
   churn(): Map<string, Churn> {
     if (!this.options.useGit) return new Map();
-    if (this.churnCache && Date.now() - this.churnCache.at < 60_000) return this.churnCache.map;
-    let map = new Map<string, Churn>();
-    try {
-      map = parseChurn(git.logNumstat(this.root, this.config.hotspots.historyDays), this.config.hotspots.historyDays);
-    } catch {
-      /* no history available */
+    const days = this.config.hotspots.historyDays;
+    const key = `${this.commitOf("HEAD") ?? "none"}|${days}|${new Date().toISOString().slice(0, 10)}`;
+    if (this.churnCache?.key === key) return this.churnCache.map;
+    let map = this.disk.getChurn(key);
+    if (!map) {
+      map = new Map<string, Churn>();
+      try {
+        map = parseChurn(git.logNumstat(this.root, days), days);
+      } catch {
+        /* no history available */
+      }
+      this.disk.setChurn(key, map);
     }
-    this.churnCache = { at: Date.now(), map };
+    this.churnCache = { key, map };
     return map;
   }
 
@@ -285,6 +339,15 @@ export class Project {
       return new Map();
     }
   }
+}
+
+/** Git's object id for this content as a blob (SHA-1, or SHA-256 when `idLength` is 64). */
+function gitBlobId(text: string, idLength: number): string {
+  const body = Buffer.from(text, "utf8");
+  return createHash(idLength === 64 ? "sha256" : "sha1")
+    .update(`blob ${body.length}\0`)
+    .update(body)
+    .digest("hex");
 }
 
 export function loadConfig(root: string): LoadResult {

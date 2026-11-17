@@ -75,19 +75,33 @@ export function hasCommit(root: string, ref: string): boolean {
   }
 }
 
-/** Content of a file at a ref, or undefined if it does not exist there. No filters are applied. */
-export function fileAt(
-  root: string,
-  ref: string,
-  relPath: string,
-): string | undefined {
-  if (!isSafeRef(ref)) throw new GitError(`Unsafe git ref: ${ref}`);
+/** Full commit id a ref points at, or undefined when it does not resolve (or there are no commits). */
+export function resolveCommit(root: string, ref: string): string | undefined {
+  if (!isSafeRef(ref)) return undefined;
   try {
-    return git(
-      root,
-      ["cat-file", "blob", `${ref}:${relPath}`],
-      8 * 1024 * 1024,
-    );
+    return git(root, ["rev-parse", "--verify", "--quiet", `${ref}^{commit}`]).trim() || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Every file of a commit with its blob id, from one `git ls-tree` call. */
+export function treeBlobs(root: string, commit: string): Map<string, string> {
+  const out = new Map<string, string>();
+  if (!/^[0-9a-f]{40,64}$/.test(commit)) return out;
+  for (const rec of git(root, ["ls-tree", "-r", "-z", "--full-tree", commit]).split("\0")) {
+    const tab = rec.indexOf("\t");
+    const [, type, blob] = rec.slice(0, tab).split(" ");
+    if (tab > 0 && type === "blob") out.set(rec.slice(tab + 1), blob);
+  }
+  return out;
+}
+
+/** Content of a blob by id. No filters are applied. */
+export function blobText(root: string, blob: string): string | undefined {
+  if (!/^[0-9a-f]{40,64}$/.test(blob)) return undefined;
+  try {
+    return git(root, ["cat-file", "blob", blob], 8 * 1024 * 1024);
   } catch {
     return undefined;
   }

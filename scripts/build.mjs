@@ -1,5 +1,10 @@
 // Bundles the extension and the CLI into single files (no node_modules shipped).
 import { build } from "esbuild";
+import { readFileSync } from "fs";
+
+// Build id baked into the bundles: the on-disk analysis cache is dropped whenever it changes.
+const { version } = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+const buildId = `${version}+${Date.now().toString(36)}`;
 
 const common = {
   bundle: true,
@@ -10,6 +15,7 @@ const common = {
   minify: true,
   legalComments: "external",
   logLevel: "info",
+  define: { "process.env.CL_BUILD": JSON.stringify(buildId) },
 };
 
 await build({ ...common, entryPoints: ["src/extension.ts"], outfile: "dist/extension.js", external: ["vscode"] });

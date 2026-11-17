@@ -643,6 +643,10 @@ node ~/.complexity-lens/cli.js init --preset strict                    # new pro
 - **No telemetry, no network access.** Analysis happens in VS Code or in the local Node process.
 - git is run **read-only**, with repository-configurable command hooks switched off.
 - In **Restricted Mode** (untrusted folders), git features and hook installation are disabled.
+- Analysis results are cached in `.git/complexity-lens/metrics-cache.json` (inside the git directory, never the
+  working tree), so a reload does not re-analyse every file. Entries are keyed by file path, modification time and size,
+  old versions by git blob id, and churn by the current commit; the whole cache is dropped when Complexity Lens is
+  updated. Nothing is cached in Restricted Mode. Deleting the file is always safe.
 - The hook installer shows exactly what it will write before writing it, and only touches the file you choose.
 - CI downloads can be verified with `gh attestation verify`.
 
@@ -662,7 +666,7 @@ Details: [SECURITY.md](../SECURITY.md) and [SECURITY_ASSESSMENT.md](SECURITY_ASS
 | The agent keeps being sent back | Lower `hook.maxRetries`, set `onFinish` to `inform`, or accept the function with `// complexity-ok: <reason>`. |
 | A renamed function is suddenly a problem | Renames count as new under the ratchet. Bring it under the limit, or accept it with `complexity-ok`. |
 | Numbers look different from another tool | Cognitive and cyclomatic complexity measure different things; both are shown. See [section 4](#4-what-is-measured). Tokens are an estimate (about 3.5 characters per token). |
-| Whole repo is slow or incomplete | Narrow `include`, or lower or raise `complexityLens.maxFiles`. An *Only the first files were analysed* note means the cap was hit. |
+| Whole repo is slow or incomplete | The first analysis after an update reads every file; later ones (and reloads) use the cache. Otherwise narrow `include`, or lower or raise `complexityLens.maxFiles`. An *Only the first files were analysed* note means the cap was hit. |
 | A small utility file shows no cohesion score | Module cohesion is only judged once a file is at least half the `fileLines` limit, and class cohesion from 3 methods. |
 | A file is FIX but its functions look fine | It may be a hotspot for its size, context load or cohesion. Open 🔍 to see which metric is over. |
 
