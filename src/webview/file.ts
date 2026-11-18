@@ -2,7 +2,7 @@
 
 import { capitalize, formatTokens } from "../core/format";
 import type { FileDetail, FileValues, FunctionDetail } from "../core/insights";
-import { functionMetricsText, METRIC } from "../core/limits";
+import { functionMetricsText, hasRed, METRIC } from "../core/limits";
 import { actionButton } from "./actions";
 import { ago, badge, h, link, section, sparkline } from "./dom";
 import { metricRow } from "./metrics";
@@ -164,6 +164,7 @@ function actionsSection(d: FileDetail): HTMLElement {
       "div",
       { class: "actions" },
       actionButton("fixPrompt", d.path),
+      actionButton("explainRed", d.path, undefined, !hasRed(d)),
       actionButton("ticket", d.path),
       actionButton("chore", d.path),
       actionButton("accept", d.path, worst, !worst),

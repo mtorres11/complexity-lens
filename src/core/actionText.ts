@@ -1,12 +1,16 @@
 // Which text each action produces. Hosts only deliver it (clipboard, a file, a line in the editor).
 
-import { fileFixPrompt, functionFixPrompt, ticketDraft } from "./actions";
+import { fileFixPrompt, fileRedPrompt, functionFixPrompt, functionRedPrompt, ticketDraft } from "./actions";
 import { allowCommentText } from "./config";
 import type { FileDetail, FunctionDetail } from "./insights";
 
 /** The fix prompt for one function, or for the whole file when no function is given. */
 export const fixPromptFor = (d: FileDetail, fn: FunctionDetail | undefined, extra: readonly string[]): string =>
   fn ? functionFixPrompt(d, fn, extra) : fileFixPrompt(d, extra);
+
+/** The "Explain red" prompt for one function, or for the whole file when no function is given. */
+export const redPromptFor = (d: FileDetail, fn: FunctionDetail | undefined, extra: readonly string[]): string =>
+  fn ? functionRedPrompt(d, fn, extra) : fileRedPrompt(d, extra);
 
 /** The function "Accept…" is about: the one asked for, else the worst one over a limit. */
 export const acceptTarget = (d: FileDetail, fnKey: string | undefined): FunctionDetail | undefined =>

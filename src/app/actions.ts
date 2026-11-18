@@ -7,6 +7,7 @@ import {
   acceptTarget,
   cleanGuidelines,
   fixPromptFor,
+  redPromptFor,
   reasonProblem,
   ticketDrafts,
   ticketFileName,
@@ -71,6 +72,7 @@ async function accept(ctx: ActionContext, d: FileDetail, _fn: FunctionDetail | u
 
 export const FILE_ACTIONS: Record<ActionKind, Strategy<[rel: string, fnKey?: string]>> = {
   fixPrompt: { title: "preparing the fix prompt", run: withDetail((ctx, d, fn) => ctx.host.copy(fixPromptFor(d, fn, guidelines(ctx)), "fix prompt")) },
+  explainRed: { title: "preparing the red-metrics prompt", run: withDetail((ctx, d, fn) => ctx.host.copy(redPromptFor(d, fn, guidelines(ctx)), "red-metrics prompt")) },
   ticket: { title: "preparing the ticket draft", run: withDetail((ctx, d) => ctx.host.saveText(ticketDraft(d, guidelines(ctx)), ticketFileName(d.path), "Ticket draft")) },
   chore: { title: "preparing the chore", run: withDetail((ctx, d, fn) => ctx.host.copy(chore(d, fn), "chore")) },
   accept: { title: "accepting the function", editsFiles: true, run: withDetail(accept) },

@@ -2,6 +2,9 @@
 // symptoms; these keep the AI from gaming them (moving code around, wrapping branches,
 // bundling parameters) instead of fixing the design.
 
+export const NO_GAMING =
+  "Don't game the metrics: no one-line wrappers used once, no parameter objects only to cut the parameter count, no helpers that each re-check the same condition. Total complexity must go down, not just move.";
+
 /** Each design rule in full (fix prompts) and, when it belongs in a ticket, in short (design notes). */
 const RULES: { long: string; short?: string }[] = [
   { long: "Follow the repo's own conventions first (lint config, contributing or agent guides)." },
@@ -25,10 +28,7 @@ const RULES: { long: string; short?: string }[] = [
     long: "Efficiency: make decisions that don't change inside a loop once, before it. Don't re-parse or recompute values in loops or sort comparators (precompute them). Don't process the same input twice. Use a Set or Map instead of chained comparisons. Never make the algorithm slower.",
     short: "Efficiency: hoist loop-invariant decisions, precompute instead of re-parsing, never make the algorithm slower.",
   },
-  {
-    long: "Don't game the metrics: no one-line wrappers used once, no parameter objects only to cut the parameter count, no helpers that each re-check the same condition. Total complexity must go down, not just move.",
-    short: "Don't game the limits with one-use wrappers or parameter objects.",
-  },
+  { long: NO_GAMING, short: "Don't game the limits with one-use wrappers or parameter objects." },
 ];
 
 const bullets = (lines: readonly string[]) => lines.map((g) => `- ${g}`);

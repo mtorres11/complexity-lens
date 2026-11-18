@@ -19,7 +19,7 @@ function fnFix(d: FileDetail, f: FunctionDetail): HTMLElement {
     ),
     h("div", { class: "muted small" }, functionMetricsText(f, undefined, " · ")),
     f.advice.length ? h("ul", { class: "advice" }, ...f.advice.map((a) => h("li", null, a))) : null,
-    actionButtons(d.path, f.key, ["fixPrompt", "chore", "accept"]),
+    actionButtons(d.path, f.key, ["fixPrompt", "explainRed", "chore", "accept"]),
   );
 }
 

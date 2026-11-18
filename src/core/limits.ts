@@ -2,6 +2,7 @@
 
 import type { FileMetrics, FunctionMetrics } from "./analyze";
 import type { FileSettings, Limits } from "./config";
+import type { FileDetail } from "./insights";
 import { ContextLoad, contextTokensOf } from "./context";
 
 /**
@@ -43,6 +44,10 @@ export const isOver = (value: number | undefined, limit: number | null): boolean
 /** The function metrics a function is over. */
 export const functionOverLimits = (f: FunctionValues, limits: Limits): FunctionMetricKey[] =>
   FUNCTION_KEYS.filter((k) => isOver(f[k], limits[k]));
+
+/** True when the file has a metric over its limit ("red"), itself or in one of its functions. */
+export const hasRed = (d: Pick<FileDetail, "overLimits" | "functions">): boolean =>
+  d.overLimits.length > 0 || d.functions.some((f) => f.over);
 
 /** Accepted with the allow comment (and a reason, when the config requires one). */
 export function isAllowed(fn: FunctionMetrics, s: FileSettings): boolean {

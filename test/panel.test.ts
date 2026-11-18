@@ -114,10 +114,13 @@ test("file actions copy or save the right text with the repo's guidelines", asyn
   await panel.onMessage({ type: "action", kind: "fixPrompt", path: "a.ts" });
   await panel.onMessage({ type: "action", kind: "fixPrompt", path: "a.ts", fn: "f" });
   await panel.onMessage({ type: "action", kind: "chore", path: "a.ts" });
+  await panel.onMessage({ type: "action", kind: "explainRed", path: "a.ts", fn: "f" });
   await panel.onMessage({ type: "action", kind: "ticket", path: "a.ts" });
   await panel.onMessage({ type: "action", kind: "nuke", path: "a.ts" });
   await panel.onMessage({ type: "action", kind: "chore", path: "../x.ts" });
-  assert.deepEqual(host.copied.map((c) => c.what), ["fix prompt", "fix prompt", "chore"]);
+  assert.deepEqual(host.copied.map((c) => c.what), ["fix prompt", "fix prompt", "chore", "red-metrics prompt"]);
+  assert.match(host.copied[3].text, /^Explain and fix only the red metrics of `f` in a\.ts/);
+  assert.ok(host.copied[3].text.includes("- Use the repo logger"));
   assert.match(host.copied[0].text, /^Refactor a\.ts/);
   assert.match(host.copied[1].text, /^Refactor `f` in a\.ts/);
   assert.ok(host.copied[0].text.includes("- Use the repo logger"));

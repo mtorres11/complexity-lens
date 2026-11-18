@@ -4,8 +4,18 @@
 import type { FileDetail, FileSummary, FunctionDetail } from "./insights";
 import { allowCommentText } from "./config";
 import { formatTokens as k } from "./format";
-import { CHORE_SUFFIX, designNoteLines, guidance, sentence } from "./guidance";
-import { FUNCTION_METRICS, functionMetricsText, METRIC } from "./limits";
+import { CHORE_SUFFIX, designNoteLines, guidance, NO_GAMING, sentence } from "./guidance";
+import {
+  FILE_KEYS,
+  FileMetricKey,
+  FUNCTION_KEYS,
+  FUNCTION_METRICS,
+  FunctionMetricKey,
+  functionMetricsText,
+  functionOverLimits,
+  LimitKey,
+  METRIC,
+} from "./limits";
 
 const RULES =
   "Rules: don't change behaviour; keep all existing tests passing; no new dependencies; " +
@@ -53,6 +63,85 @@ function splitText(d: FileDetail): string {
 }
 
 const importsText = (d: FileDetail) => (d.context.importsAdvice ? `Context load: ${d.context.importsAdvice}.` : "");
+
+// "Explain red": only the metrics over their limits, explained and fixed in place, with the
+// metrics that are within their limits listed as ones that must stay there (no new findings).
+
+const FILE_VALUE: Record<FileMetricKey, (d: FileDetail) => number> = {
+  fileLines: (d) => d.fileLines,
+  fileTokens: (d) => d.fileTokens,
+  imports: (d) => d.internalImports.length + d.externalImports,
+  lcom: (d) => d.lcom,
+  contextTokens: (d) => d.contextTokens,
+};
+
+/** "cognitive complexity 20 (limit 15)", with tokens shown as ≈1.2k. */
+function valueText(key: LimitKey, value: number, limit: number | null): string {
+  const m = METRIC[key];
+  const n = (v: number) => (m.unit === "tokens" ? `≈${k(v)}` : `${v}`);
+  return `${m.label} ${n(value)}${limit === null ? "" : ` (limit ${n(limit)})`}`;
+}
+
+const fnRed = (d: FileSummary, f: FunctionDetail) => functionOverLimits(f, d.limits);
+const fnText = (d: FileSummary, f: FunctionDetail, keys: readonly FunctionMetricKey[]) =>
+  keys.map((key) => valueText(key, f[key], d.limits[key])).join(", ");
+
+/** Function metrics that are within their (enabled) limits. */
+const fnGreen = (d: FileSummary, f: FunctionDetail) => {
+  const red = fnRed(d, f);
+  return FUNCTION_KEYS.filter((key) => d.limits[key] != null && !red.includes(key));
+};
+
+const bulletList = (lines: readonly string[]) => lines.map((g) => `- ${g}`);
+
+const RED_STEPS = [
+  "Steps:",
+  "1. Explain each red metric in plain words: what in this code drives the number, with line references.",
+  "2. Propose the smallest change that brings each red metric within its limit, and say how it moves the other metrics.",
+  "3. Make that change. Touch only the code behind the red metrics: no file splits, renames or unrelated clean-ups.",
+  "No new findings: every metric listed as within its limit must stay within it, and no other function or file metric may go over its limit.",
+  NO_GAMING,
+];
+
+const RED_AFTER = "After: list the before/after value of every metric above.";
+
+export function functionRedPrompt(d: FileDetail, f: FunctionDetail, extra: readonly string[] = []): string {
+  const green = fnGreen(d, f);
+  return [
+    `Explain and fix only the red metrics of \`${f.key}\` in ${d.path} (lines ${f.line}–${f.endLine}). This is a targeted fix, not a redesign.`,
+    `Red (over the limit): ${fnText(d, f, fnRed(d, f))}.`,
+    green.length ? `Within the limit, keep it that way: ${fnText(d, f, green)}.` : "",
+    f.hotspots.length ? `Where the complexity is: ${hotLines(f)}.` : "",
+    f.advice.length ? `Suggested: ${f.advice.join(" ")}` : "",
+    ...RED_STEPS,
+    ...bulletList(extra),
+    RULES,
+    limitsLine(d),
+    RED_AFTER,
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+export function fileRedPrompt(d: FileDetail, extra: readonly string[] = []): string {
+  const redFile = FILE_KEYS.filter((key) => d.overLimits.includes(key));
+  const greenFile = FILE_KEYS.filter((key) => d.limits[key] != null && !redFile.includes(key));
+  const fileText = (keys: FileMetricKey[]) => keys.map((key) => valueText(key, FILE_VALUE[key](d), d.limits[key])).join(", ");
+  const fns = d.functions.filter((f) => f.over).slice(0, 5);
+  return [
+    `Explain and fix only the red metrics in ${d.path}. This is a targeted fix, not a redesign.`,
+    redFile.length ? `Red file metrics: ${fileText(redFile)}.` : "",
+    fns.length ? `Red function metrics:\n${fns.map((f) => `- ${f.key} (line ${f.line}): ${fnText(d, f, fnRed(d, f))}`).join("\n")}` : "",
+    greenFile.length ? `Within the limit, keep it that way: ${fileText(greenFile)}, and every function metric not listed above.` : "",
+    ...RED_STEPS,
+    ...bulletList(extra),
+    RULES,
+    limitsLine(d),
+    RED_AFTER,
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
 
 export function fileFixPrompt(d: FileDetail, extra: readonly string[] = []): string {
   const bad = d.functions.filter((f) => f.over).slice(0, 5);

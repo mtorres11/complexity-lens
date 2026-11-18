@@ -87,6 +87,6 @@ export function renderFunction(d: FileDetail, key: string): HTMLElement[] {
     whereSection(d, f),
     callsSection(d, f),
     f.advice.length ? section("HOW TO FIX", h("ul", { class: "advice" }, ...f.advice.map((a) => h("li", null, a)))) : null,
-    section("ACTIONS", actionButtons(d.path, f.key, ["fixPrompt", "chore", "accept"])),
+    section("ACTIONS", actionButtons(d.path, f.key, f.over ? ["fixPrompt", "explainRed", "chore", "accept"] : ["fixPrompt", "chore", "accept"])),
   ].filter((n): n is HTMLElement => !!n);
 }

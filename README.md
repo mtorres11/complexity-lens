@@ -19,7 +19,7 @@ Created by **Marco Torres C** · <https://github.com/mtorres11/complexity-lens>
 | **Deep analysis** | Per file: why it matters, every metric against its limit, churn trend, who depends on it, functions, a suggested split. Per function: where the complexity is (line by line) and how to fix it. |
 | **Your change** | Did my change make anything more complex? With *Fix all with AI* and *Copy PR summary*. |
 | **What to fix** | The whole repo ranked by payoff: complex × changed often × depended on. FIX / PLAN / LEAVE. Search for a file to see only its fixes, down to each function. |
-| **Actions** | ✨ Fix with AI (a ready prompt), 🎫 Ticket draft (copy or save as Markdown), 🧹 Chore, Accept (adds a `complexity-ok` comment), Ignore. |
+| **Actions** | ✨ Fix with AI (a ready prompt), 🎯 Explain red (a prompt to explain and fix only the metrics over their limits, without new findings), 🎫 Ticket draft (copy or save as Markdown), 🧹 Chore, Accept (adds a `complexity-ok` comment), Ignore. |
 | **Inline scores** | A small line above each function: `complexity 18 ⚠ · 62 lines · nesting 3`. |
 | **Status bar** | The current file at a glance: highest complexity and estimated tokens. |
 | **Agent hook** | For AI coding agents with command hooks. After each edit, the agent is told about new problems and fixes them in the same turn. Before it finishes, it can be asked to clean up what's left. |
