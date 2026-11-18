@@ -131,7 +131,7 @@ Tip: right-click the icon → **Move To → Secondary Side Bar** to keep it on t
 | **Coupling: Ca** (afferent) | Files in the repo that import this one: how far a mistake here spreads | (shown, not limited) |
 | **Coupling: Ce** (efferent) | Modules this file imports | 15 (`imports`) |
 | **Instability** | Ce ÷ (Ca + Ce): 0 = many depend on it (change carefully), 1 = it depends on many | (shown) |
-| **Cohesion: LCOM4** | Unrelated groups of code. In a class with 3+ methods: methods that share no fields and don't call each other. In a file at least half the line limit long: top-level functions/classes that never refer to each other or share state. 1 = cohesive. | 1 (`lcom`) |
+| **Cohesion: LCOM4** | Unrelated groups of code. In a class with 3+ methods and some instance state: methods that share no fields and don't call each other (constructors and static members are left out; stateless classes, such as adapters that only wrap calls, aren't judged). In a file at least half the line limit long: top-level functions/classes that never refer to each other or share state. 1 = cohesive. | 1 (`lcom`) |
 | **Context load** | Estimated tokens an AI agent reads to work on the file: the file **plus its relative imports** (≈3.5 characters per token), except imports matched by `tokens.ignoreImports` | 20000 (`contextTokens`) |
 | **File lines** / **Tokens** | Length of the file / estimated tokens of the file alone | 400 / 8000 |
 

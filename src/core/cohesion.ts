@@ -1,7 +1,9 @@
 // Cohesion (LCOM4): how many unrelated groups of code live in one class or file.
 //  - Class: methods are connected when one calls the other (this.m()) or both use the
-//    same field (this.x). Constructors are left out, as is usual for LCOM4, and classes
-//    with fewer than 3 methods are not judged.
+//    same field (this.x). Constructors and static members (which have no instance to
+//    share) are left out, as is usual for LCOM4. Classes with fewer than 3 methods, or
+//    with no instance state at all (stateless adapters), are not judged: without fields
+//    every method would count as its own group.
 //  - File (module): top-level functions and classes are connected when one refers to the
 //    other or both use the same top-level variable.
 // LCOM = number of connected groups. 1 = cohesive; 3 = three unrelated jobs.
@@ -108,6 +110,31 @@ function memberUses(fn: FnNode, name: string): Set<string> {
   return uses;
 }
 
+const isStatic = (m: ts.ClassElement) =>
+  ts.canHaveModifiers(m) && !!ts.getModifiers(m)?.some((k) => k.kind === ts.SyntaxKind.StaticKeyword);
+
+const isThisAssignment = (n: ts.Node) =>
+  ts.isBinaryExpression(n) &&
+  n.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+  ts.isPropertyAccessExpression(n.left) &&
+  n.left.expression.kind === ts.SyntaxKind.ThisKeyword;
+
+/** One member that holds instance data: a data field or constructor parameter properties. */
+const declaresState = (m: ts.ClassElement): boolean =>
+  !isStatic(m) &&
+  ((ts.isPropertyDeclaration(m) && !memberFunction(m)) ||
+    (ts.isConstructorDeclaration(m) && m.parameters.some((p) => ts.isParameterPropertyDeclaration(p, m))));
+
+/** Whether instances hold any data: a declared field, a parameter property, or `this.x = …` (plain JS). */
+function hasInstanceState(cls: ts.ClassLikeDeclaration): boolean {
+  if (cls.members.some(declaresState)) return true;
+  let assigns = false;
+  collect(cls, (n) => {
+    assigns ||= isThisAssignment(n);
+  });
+  return assigns;
+}
+
 export function classCohesion(cls: ts.ClassLikeDeclaration, sf: ts.SourceFile): Cohesion | undefined {
   const members = new Map<string, Set<string>>();
   const sizes = new Map<string, { lines: number; tokens: number }>();
@@ -115,13 +142,13 @@ export function classCohesion(cls: ts.ClassLikeDeclaration, sf: ts.SourceFile): 
   for (const m of cls.members) {
     const fn = memberFunction(m);
     const name = fn && simpleName(fn);
-    if (!fn?.body || !name || name === "constructor") continue;
+    if (!fn?.body || !name || name === "constructor" || isStatic(m)) continue;
     const id = `${className}.${name}`;
     members.set(id, memberUses(fn, name));
     sizes.set(id, span(sf, m));
   }
-  // Small classes (fewer than 3 methods) give no meaningful cohesion signal.
-  if (members.size < 3) return undefined;
+  // Small or stateless classes give no meaningful cohesion signal.
+  if (members.size < 3 || !hasInstanceState(cls)) return undefined;
   const comps = connect(members);
   return { scope: "class", name: className, lcom: comps.length, groups: groupsFrom(comps, sizes) };
 }

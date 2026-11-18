@@ -266,6 +266,35 @@ test("cohesion: a class with two unrelated halves has LCOM 2; a module of relate
   assert.equal(joined.cohesion.find((c) => c.scope === "module")?.lcom, 1, "shared module state connects functions");
 });
 
+test("cohesion: stateless classes are not judged; static members are left out", () => {
+  const classLcom = (src: string) => analyzeSource("a.ts", src).cohesion.find((c) => c.scope === "class")?.lcom;
+  const stateless = `class Git {
+    head(r: string) { return run(r, "rev-parse"); }
+    hash(r: string, f: string) { return run(r, f); }
+    read(f: string) { return fs.readFileSync(f); }
+    export(r: string) { return run(r, "archive"); }
+  }`;
+  assert.equal(classLcom(stateless), undefined, "no fields: nothing to share, so no LCOM");
+  const withFactory = `class Table {
+    private readonly rows: number[] = [];
+    static from(path: string) { return new Table(); }
+    get(i: number) { return this.rows[i]; }
+    first() { return this.get(0); }
+    size() { return this.rows.length; }
+  }`;
+  assert.equal(classLcom(withFactory), 1, "a static factory is not a separate group");
+  const paramProps = `class S {
+    constructor(private a: number, private b: number) {}
+    x() { return this.a; } y() { return this.a; } z() { return this.b; }
+  }`;
+  assert.equal(classLcom(paramProps), 2, "constructor parameter properties are state");
+  const plainJs = `class J {
+    constructor() { this.a = 1; this.b = 2; }
+    x() { return this.a; } y() { return this.a; } z() { return this.b; }
+  }`;
+  assert.equal(analyzeSource("j.js", plainJs).cohesion.find((c) => c.scope === "class")?.lcom, 2, "this.x = … in plain JS is state");
+});
+
 test("calls: plain and own-member calls are recorded", () => {
   const src = `class S { run() { this.save(); helper(); other.thing(); } save() {} }`;
   assert.deepEqual(cc(src, "S.run").calls.sort(), ["helper", "this.save"]);
