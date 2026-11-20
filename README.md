@@ -8,7 +8,8 @@ Created by **Marco Torres C** · <https://github.com/mtorres11/complexity-lens>
 
 📖 **[Full user manual and tutorials](docs/MANUAL.md)**: every metric and control, the agent hook, CI, team rollout, troubleshooting and FAQ.
 
-- **Local only.** No telemetry, no network calls. Your code never leaves your machine.
+- **Local only.** No telemetry, no network calls. Your code never leaves your machine, unless you press
+  **👁 Preview fix**, which runs your own Claude Code (read-only) on the file.
 - **TypeScript and JavaScript** (`.ts .tsx .js .jsx .mts .cts .mjs .cjs`).
 
 ## What you get
@@ -19,7 +20,7 @@ Created by **Marco Torres C** · <https://github.com/mtorres11/complexity-lens>
 | **Deep analysis** | Per file: why it matters, every metric against its limit, churn trend, who depends on it, functions, a suggested split. Per function: where the complexity is (line by line) and how to fix it. |
 | **Your change** | Did my change make anything more complex? With *Fix all with AI* and *Copy PR summary*. |
 | **What to fix** | The whole repo ranked by payoff: complex × changed often × depended on. FIX / PLAN / LEAVE. Search for a file to see only its fixes, down to each function. |
-| **Actions** | ✨ Fix with AI (a ready prompt), 🎯 Explain red (a prompt to explain and fix only the metrics over their limits, without new findings), 🎫 Ticket draft (copy or save as Markdown), 🧹 Chore, Accept (adds a `complexity-ok` comment), Ignore. |
+| **Actions** | ✨ Fix with AI (a ready prompt), 🎯 Explain red (a prompt to explain and fix only the metrics over their limits, without new findings), 👁 Preview fix (Claude writes the fix; compare current and fixed, with the metrics before → after, then Apply, Try again or Discard), 🎫 Ticket draft (copy or save as Markdown), 🧹 Chore, Accept (adds a `complexity-ok` comment), Ignore. |
 | **Inline scores** | A small line above each function: `complexity 18 ⚠ · 62 lines · nesting 3`. |
 | **Status bar** | The current file at a glance: highest complexity and estimated tokens. |
 | **Agent hook** | For AI coding agents with command hooks. After each edit, the agent is told about new problems and fixes them in the same turn. Before it finishes, it can be asked to clean up what's left. |
@@ -110,7 +111,8 @@ node complexity-lens-cli.js check --base origin/main --format github
 
 ## Security and privacy
 
-No telemetry and no network access. Git is run read-only, with repository-configurable command hooks
+No telemetry and no network access of its own. The one exception is **👁 Preview fix**, and only when you
+press it: it runs your Claude Code, with your account, using read-only tools. Git is run read-only, with repository-configurable command hooks
 switched off. In VS Code Restricted Mode, git features and hook installation are disabled.
 Details: [SECURITY.md](SECURITY.md) and [docs/SECURITY_ASSESSMENT.md](docs/SECURITY_ASSESSMENT.md).
 

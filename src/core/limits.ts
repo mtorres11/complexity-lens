@@ -72,6 +72,15 @@ export function fileValue(m: FileMetrics, metric: FileMetricKey, s: FileSettings
   return m[metric];
 }
 
+/**
+ * A metric's value for a file as judged against its limit: the worst function not accepted with
+ * the allow comment for function metrics, the file's own value otherwise.
+ */
+export function metricValue(m: FileMetrics, metric: Metric, s: FileSettings, ctx?: ContextLoad): number | undefined {
+  if (metric.scope === "file") return fileValue(m, metric.key, s, ctx);
+  return Math.max(0, ...m.functions.filter((f) => !isAllowed(f, s)).map((f) => f[metric.key]));
+}
+
 /** "cognitive 20 (limit 15), cyclomatic 3, …": a function's metrics, with limits when given. */
 export function functionMetricsText(f: FunctionValues, limits?: Limits, separator = ", "): string {
   const limitText = (k: FunctionMetricKey) => (limits?.[k] == null ? "" : ` (limit ${limits[k]})`);

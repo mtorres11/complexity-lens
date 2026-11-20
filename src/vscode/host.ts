@@ -4,6 +4,7 @@
 import * as path from "path";
 import * as vscode from "vscode";
 import type { HostCommand, HostPort } from "../app/host";
+import { choose, review, writeFiles } from "./preview";
 
 const SECTION = "complexityLens";
 const COPY = "Copy to clipboard";
@@ -60,6 +61,9 @@ const EDITOR: Omit<HostPort, "post" | "visible" | "getState" | "setState" | "sav
   insertLine,
   notify: (level, text) => void NOTIFY[level](text),
   withProgress: async (title, run) => vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title }, run),
+  choose,
+  review,
+  writeFiles,
 };
 
 export interface HostDeps {

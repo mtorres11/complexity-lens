@@ -8,7 +8,9 @@ Report privately via GitHub: **Security** tab → **Report a vulnerability**
 
 ## How Complexity Lens handles your code
 
-- **Nothing leaves your machine.** No telemetry, no analytics, no network requests of any kind.
+- **Nothing leaves your machine.** No telemetry, no analytics, no network requests of any kind. The only exception is
+  **👁 Preview fix**, and only when you press it: it runs your own Claude Code (with your account) with the fix prompt.
+  Claude can read the repo but has no tools to edit it, and nothing is written until you press **Apply**.
 - **Source code is parsed, never executed.** It uses the TypeScript parser only: no type checking, no module loading, no evaluation.
 - **Git is run read-only and safely**: directly (never through a shell), with arguments as a list, with
   repository-configurable command hooks switched off (`core.fsmonitor`, `core.hooksPath`, external diff, pager), and

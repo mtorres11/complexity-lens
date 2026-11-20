@@ -7,6 +7,7 @@ import { Current, PanelController } from "../app/panel";
 import type { HostWording } from "../shared/protocol";
 import type { About } from "./about";
 import { createHost } from "./host";
+import { registerPreview } from "./preview";
 
 const WORDING: HostWording = {
   untrusted: "Restricted Mode: git features (changes, churn, comparisons) are off.",
@@ -24,6 +25,8 @@ export class Sidebar implements vscode.WebviewViewProvider {
     about: About,
   ) {
     const host = createHost({ ctx, view: () => this.view, root: () => current().project?.root, repoUrl: about.repoUrl });
+    // The host's Preview fix review: read-only documents and the editor title-bar commands.
+    ctx.subscriptions.push(...registerPreview());
     this.panel = new PanelController(host, current, {
       about: { author: about.author, version: about.version, hasRepo: !!about.repoUrl },
       wording: WORDING,

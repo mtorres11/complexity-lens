@@ -93,6 +93,30 @@
         "command": "complexityLens.openSettings",
         "title": "Personal Settings",
         "category": "Complexity Lens"
+      },
+      {
+        "command": "complexityLens.previewApply",
+        "title": "Apply Fix",
+        "category": "Complexity Lens",
+        "icon": "$(check)"
+      },
+      {
+        "command": "complexityLens.previewRetry",
+        "title": "Try Again",
+        "category": "Complexity Lens",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "complexityLens.previewDiscard",
+        "title": "Discard Fix",
+        "category": "Complexity Lens",
+        "icon": "$(close)"
+      },
+      {
+        "command": "complexityLens.previewToggle",
+        "title": "Toggle Current / Fixed",
+        "category": "Complexity Lens",
+        "icon": "$(arrow-swap)"
       }
     ],
     "menus": {
@@ -106,6 +130,46 @@
           "command": "complexityLens.openConfig",
           "when": "view == complexityLens.view",
           "group": "navigation@2"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "complexityLens.previewApply",
+          "when": "resourceScheme == complexity-lens-preview",
+          "group": "navigation@1"
+        },
+        {
+          "command": "complexityLens.previewRetry",
+          "when": "resourceScheme == complexity-lens-preview",
+          "group": "navigation@2"
+        },
+        {
+          "command": "complexityLens.previewDiscard",
+          "when": "resourceScheme == complexity-lens-preview",
+          "group": "navigation@3"
+        },
+        {
+          "command": "complexityLens.previewToggle",
+          "when": "resourceScheme == complexity-lens-preview",
+          "group": "navigation@4"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "complexityLens.previewApply",
+          "when": "resourceScheme == complexity-lens-preview"
+        },
+        {
+          "command": "complexityLens.previewRetry",
+          "when": "resourceScheme == complexity-lens-preview"
+        },
+        {
+          "command": "complexityLens.previewDiscard",
+          "when": "resourceScheme == complexity-lens-preview"
+        },
+        {
+          "command": "complexityLens.previewToggle",
+          "when": "resourceScheme == complexity-lens-preview"
         }
       ]
     },
@@ -188,6 +252,12 @@
           "default": "",
           "scope": "application",
           "markdownDescription": "Path of your AI agent's hook settings file, relative to the repo root, used by **Install Agent Hook**. The file must use the `PostToolUse` / `Stop` command-hook format. Leave empty to be asked the first time."
+        },
+        "complexityLens.claudePath": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "markdownDescription": "The Claude Code command used by **👁 Preview fix**. Leave empty to use `claude` on your PATH, or else the one that comes with the Claude Code extension. It can only be set on this machine (not by a workspace), because the extension runs it."
         }
       }
     }

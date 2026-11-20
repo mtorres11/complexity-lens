@@ -18,10 +18,13 @@ import { choreList, prSummary } from "../core/summaries";
 import type { Project } from "../node/project";
 import type { ActionKind, BatchKind } from "../shared/protocol";
 import type { HostPort } from "./host";
+import { previewFix } from "./preview";
 
 export interface ActionContext {
   host: HostPort;
   project: Project;
+  /** The AI's answer to a prompt, run in the repo with read-only tools (Preview fix). */
+  askAi(prompt: string): Promise<string>;
   detail(rel: string): Promise<FileDetail | undefined>;
   /** Summaries of the "Your change" tab. */
   changeItems(): Promise<FileSummary[]>;
@@ -36,6 +39,8 @@ interface Strategy<Args extends unknown[]> {
   title: string;
   /** Edits files, so it needs a trusted workspace. */
   editsFiles?: true;
+  /** Shows its own progress, because it waits for the user in between (Preview fix). */
+  ownProgress?: true;
   run(ctx: ActionContext, ...args: Args): Promise<void>;
 }
 
@@ -73,6 +78,7 @@ async function accept(ctx: ActionContext, d: FileDetail, _fn: FunctionDetail | u
 export const FILE_ACTIONS: Record<ActionKind, Strategy<[rel: string, fnKey?: string]>> = {
   fixPrompt: { title: "preparing the fix prompt", run: withDetail((ctx, d, fn) => ctx.host.copy(fixPromptFor(d, fn, guidelines(ctx)), "fix prompt")) },
   explainRed: { title: "preparing the red-metrics prompt", run: withDetail((ctx, d, fn) => ctx.host.copy(redPromptFor(d, fn, guidelines(ctx)), "red-metrics prompt")) },
+  preview: { title: "previewing the fix", editsFiles: true, ownProgress: true, run: withDetail((ctx, d, fn) => previewFix(ctx, d, fn, guidelines(ctx))) },
   ticket: { title: "preparing the ticket draft", run: withDetail((ctx, d) => ctx.host.saveText(ticketDraft(d, guidelines(ctx)), ticketFileName(d.path), "Ticket draft")) },
   chore: { title: "preparing the chore", run: withDetail((ctx, d, fn) => ctx.host.copy(chore(d, fn), "chore")) },
   accept: { title: "accepting the function", editsFiles: true, run: withDetail(accept) },

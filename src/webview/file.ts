@@ -165,6 +165,7 @@ function actionsSection(d: FileDetail): HTMLElement {
       { class: "actions" },
       actionButton("fixPrompt", d.path),
       actionButton("explainRed", d.path, undefined, !hasRed(d)),
+      actionButton("preview", d.path),
       actionButton("ticket", d.path),
       actionButton("chore", d.path),
       actionButton("accept", d.path, worst, !worst),

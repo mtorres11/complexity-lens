@@ -8,6 +8,7 @@ import { send } from "./bridge";
 const BUTTON: Record<ActionKind, { label: string; title?: string }> = {
   fixPrompt: { label: "✨ Fix with AI", title: "Copy a prompt for your AI agent" },
   explainRed: { label: "🎯 Explain red", title: "Copy a prompt for your AI agent to explain and fix only the metrics over their limits, without adding new findings" },
+  preview: { label: "👁 Preview fix", title: "Ask Claude for the fix and compare current and fixed code before anything changes" },
   ticket: { label: "🎫 Ticket draft", title: "Copy or save a ready-to-file ticket" },
   chore: { label: "🧹 Chore", title: "Copy a one-line chore" },
   accept: { label: "Accept…", title: "Keep it as is, with a reason in the code" },

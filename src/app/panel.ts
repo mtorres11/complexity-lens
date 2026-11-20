@@ -3,6 +3,7 @@
 // acted on, and only known tabs, scopes, sorts, branches and actions are accepted.
 
 import { defaultConfig } from "../core/config";
+import { askClaude } from "../node/claude";
 import * as git from "../node/git";
 import type { Project } from "../node/project";
 import {
@@ -57,6 +58,8 @@ export class PanelController {
     private readonly host: HostPort,
     private readonly current: () => Current,
     private readonly info: PanelInfo,
+    /** Answers a prompt in the repo folder; Claude Code unless a test passes its own. */
+    private readonly ai?: (prompt: string, root: string) => Promise<string>,
   ) {}
 
   refreshSoon(delayMs = 400, invalidate = false): void {
@@ -195,6 +198,7 @@ export class PanelController {
     return {
       host: this.host,
       project,
+      askAi: (prompt) => (this.ai ? this.ai(prompt, project.root) : askClaude(prompt, project.root, this.host.getSetting("claudePath", ""))),
       detail: (rel) => b.detail(rel, UNCANCELLED),
       changeItems: () => b.changeItems(this.state().compare, UNCANCELLED),
       topFix: () => b.topFix(UNCANCELLED, ignored()),
@@ -207,9 +211,9 @@ export class PanelController {
   }
 
   /** Runs a user action with progress; failures are shown, never silent. */
-  private async guarded(title: string, run: () => Promise<void>): Promise<void> {
+  private async guarded(title: string, run: () => Promise<void>, progress = true): Promise<void> {
     try {
-      await this.host.withProgress(`Complexity Lens: ${title}…`, run);
+      await (progress ? this.host.withProgress(`Complexity Lens: ${title}…`, run) : run());
     } catch (e) {
       this.host.notify("error", `Complexity Lens: ${title} failed: ${(e as Error).message}`);
     }
@@ -221,7 +225,7 @@ export class PanelController {
     if (strategy.editsFiles && !c.trusted) return this.host.notify("warning", "Complexity Lens: trust this workspace to edit files.");
     const ctx = this.context(c.project);
     const fn = typeof m.fn === "string" ? m.fn : undefined;
-    await this.guarded(strategy.title, () => strategy.run(ctx, m.path, fn));
+    await this.guarded(strategy.title, () => strategy.run(ctx, m.path, fn), !strategy.ownProgress);
   }
 
   private async batch(c: Current, kind: unknown): Promise<void> {

@@ -5,7 +5,7 @@ import type { FileDetail, FileSummary } from "../core/insights";
 export const TABS = ["report", "change", "todo"] as const;
 export const SCOPES = ["changed", "repo", "current"] as const;
 export const SORTS = ["payoff", "aiCost", "complexity", "churn", "name"] as const;
-export const ACTIONS = ["fixPrompt", "explainRed", "ticket", "chore", "accept", "ignore", "unignore"] as const;
+export const ACTIONS = ["fixPrompt", "explainRed", "preview", "ticket", "chore", "accept", "ignore", "unignore"] as const;
 export const BATCHES = ["fixAll", "prSummary", "tickets", "choreList"] as const;
 
 export type Tab = (typeof TABS)[number];

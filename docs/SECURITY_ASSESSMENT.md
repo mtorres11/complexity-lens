@@ -28,7 +28,9 @@
           DOM built with textContent only                 retry counter inside .git/
 ```
 
-**Network:** none. The extension, the CLI and the hook make no network requests.
+**Network:** none of its own. The extension, the CLI and the hook make no network requests. **👁 Preview fix**
+starts the user's Claude Code (`claude -p`), which talks to Anthropic with the user's own account; it runs only when the
+user presses the button and picks a prompt.
 
 **Data written:**
 
@@ -41,6 +43,7 @@
 | Ticket drafts | A Markdown file the user picks in a save dialog | Only when the user chooses *Save as Markdown file…* |
 | `// complexity-ok: <reason>` comment | Above the chosen function | Only via *Accept…*, after the user types the reason; disabled in Restricted Mode |
 | Ignored files list | VS Code workspace state (local) | Only via *Ignore* |
+| Files from *Preview fix* | The previewed files, and new files it proposes, inside the repo | Only via *Apply*, after the user has seen the diff; refused if a file changed since the preview; undoable in the editor; disabled in Restricted Mode |
 
 ## 2. Threat model and controls
 
@@ -54,6 +57,7 @@
 | **Hook input abuse** | The hook reads at most 1 MB of JSON, only reacts to `Write`/`Edit`/`MultiEdit`, requires an absolute file path inside the repo and included by the config, and fails open (silent, exit 0) on any error. |
 | **Git history** | Churn reads `git log --numstat` (same safe git flags). Author emails are only counted per file in memory; they're never stored, shown or exported. |
 | **Clipboard** | Prompts, tickets and summaries are built in the extension host from its own analysis and written only when the user clicks a button. |
+| **Preview fix runs a program / changes code** | The `claude` command comes from the `complexityLens.claudePath` setting, which is machine-scoped (a workspace can't set it), else `claude` on the PATH, else the Claude Code extension's own binary; run via `execFile` (no shell) with a fixed argument list, the prompt on stdin. Claude only gets read-only tools (`--tools Read,Grep,Glob --permission-mode dontAsk`). The proposal is shown as read-only virtual documents; proposed paths outside the repo reject the whole proposal; files over the token limit aren't previewed; *Apply* rechecks that the files haven't changed. |
 | **Agent loops** | `onFinish: "block"` is capped by `maxRetries` (max 10, default 2), with a per-session counter, then reports to the user instead. |
 | **Hook installer abuse** | Disabled in Restricted Mode. Shows the exact JSON and target file in a modal before writing. Merges into existing settings without removing anything, and refuses to touch a settings file that isn't valid JSON. The hook command is a fixed string with no repo data interpolated, and is guarded so it's a no-op when the checker isn't installed. Never overwrites a `~/.complexity-lens/cli.js` it didn't create. |
 | **XSS in the sidebar** (file paths, function names) | DOM built with `textContent`/`createElement` only. CSP `default-src 'none'`, script by nonce (`crypto.randomBytes`), styles from the extension only. |

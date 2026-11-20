@@ -104,6 +104,12 @@ Tip: right-click the icon → **Move To → Secondary Side Bar** to keep it on t
    When only one or two metrics are red and a full refactor isn't worth it, press **🎯 Explain red**: the prompt lists only
    the metrics over their limits, asks the AI to explain what drives each one and make the smallest fix, and lists the
    metrics within their limits as ones that must stay there, so the fix adds no new findings.
+   To see a fix before anything changes, press **👁 Preview fix** and pick *Only the red metrics* or *Full refactor*.
+   Claude Code writes the fix (it can read the repo but not edit it). The diff opens with **current** on the left and
+   **fixed** on the right, and a notification lists the metrics before → after, warning if the fix adds new findings.
+   Use the title-bar buttons or the notification: **Apply** (writes it; Cmd/Ctrl+Z undoes it), **Try again**, **Discard**,
+   or **⇄** to switch one editor between current and fixed. Closing the preview tabs discards it. It needs
+   [Claude Code](https://claude.com/claude-code); set `complexityLens.claudePath` if `claude` isn't found.
 7. Before a pull request, open **Your change**: it says whether your change made anything more complex, and gives you
    **Fix all with AI** and **Copy PR summary**.
 8. Click **Rules…** → **recommended** to create `complexity-lens.json`, and **Agent hook…** to connect an AI agent
@@ -225,7 +231,7 @@ The summary then reads *N of M file(s)*. **Clear filters** shows everything agai
 | **Coupling** | **Used by**: files that import it. **Uses**: files and packages it imports. Click a file to open *its* deep analysis. |
 | **Functions** | Worst first, with cognitive, cyclomatic, lines and nesting. Click one for its own screen. |
 | **Suggested split** | When the file is big and has unrelated groups: which functions go in which new file, and the tokens saved per edit. A file named like `name.role.ts` gets parts named `name.<word>.ts`. Groups about the same subject become one file, and a small declaration with no connections joins the group whose names share the most words with it, or stays in the file, instead of getting a file of its own |
-| **Actions** | ✨ Fix with AI · 🎯 Explain red (off when nothing is red) · 🎫 Ticket draft · 🧹 Chore · Accept… · Ignore |
+| **Actions** | ✨ Fix with AI · 🎯 Explain red (off when nothing is red) · 👁 Preview fix · 🎫 Ticket draft · 🧹 Chore · Accept… · Ignore |
 
 Use **← Back** and the breadcrumb (`Project › file › function`) to move around. Every file path and line number is a link
 that opens the file at that place; next to related files, a small **🔍** opens their deep analysis.
@@ -238,7 +244,7 @@ that opens the file at that place; next to related files, a small **🔍** opens
 - **Calls / called by** within the file (click to jump).
 - **How to fix:** specific suggestions, e.g. *"Move lines 61–86 (the for) into its own function: about −18 cognitive"*,
   *"Replace the switch at line 70 with a lookup table"*, *"Pass fewer than 7 things: split the function, or pass the object the values come from"*.
-- **Actions:** ✨ Fix with AI · 🎯 Explain red (when the function is over a limit) · 🧹 Chore · Accept…
+- **Actions:** ✨ Fix with AI · 🎯 Explain red (when the function is over a limit) · 👁 Preview fix · 🧹 Chore · Accept…
 
 ### Your change
 
@@ -253,7 +259,7 @@ that opens the file at that place; next to related files, a small **🔍** opens
 
 **Search** (🔎 at the top): type part of a path, or pick a file from the suggestions, to see only matching files.
 When the search names **one file** (or you came from a Report card's **🛠**), you also get that file's
-**functions to fix**, each with its advice and **✨ Fix with AI / 🎯 Explain red / 🧹 Chore / Accept…**. Press **✕** to show everything again;
+**functions to fix**, each with its advice and **✨ Fix with AI / 🎯 Explain red / 👁 Preview fix / 🧹 Chore / Accept…**. Press **✕** to show everything again;
 clicking the tab itself also shows everything.
 
 The whole repository, ranked by payoff, in three groups: **FIX** (open), **PLAN** and **LEAVE** (click to expand).

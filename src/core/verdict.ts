@@ -11,7 +11,7 @@ import type { Config, FileSettings, LimitKey } from "./config";
 import { ContextLoad, contextTokensOf } from "./context";
 import { Finding, isProblem } from "./evaluate";
 import { formatTokens } from "./format";
-import { fileValue, isAllowed, isOver, METRICS } from "./limits";
+import { isOver, metricValue, METRICS } from "./limits";
 
 export const VERDICTS = ["FIX", "PLAN", "LEAVE", "OK"] as const;
 export type Verdict = (typeof VERDICTS)[number];
@@ -39,10 +39,7 @@ export interface Decision {
 
 /** Current values over their limits, ignoring functions accepted by the allow comment. */
 export function overLimits(m: FileMetrics, s: FileSettings, ctx?: ContextLoad): LimitKey[] {
-  const fns = m.functions.filter((f) => !isAllowed(f, s));
-  const value = (metric: (typeof METRICS)[number]): number | undefined =>
-    metric.scope === "function" ? Math.max(0, ...fns.map((f) => f[metric.key])) : fileValue(m, metric.key, s, ctx);
-  return METRICS.filter((metric) => isOver(value(metric), s.limits[metric.key])).map((metric) => metric.key);
+  return METRICS.filter((metric) => isOver(metricValue(m, metric, s, ctx), s.limits[metric.key])).map((metric) => metric.key);
 }
 
 function why({ metrics: m, churn, ca, context }: DecideInput, regressed: boolean): string {
